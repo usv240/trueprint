@@ -144,8 +144,8 @@
           <div class="card" style="margin-top:16px">
             <h3>Provenance &amp; authenticity</h3>
             <div class="stat-row">
-              <div class="stat org"><div class="v" id="s-org">–</div><div class="k">Original</div></div>
-              <div class="stat enh"><div class="v" id="s-enh">–</div><div class="k">Enhanced</div></div>
+              <div class="stat org"><div class="v" id="s-org">–</div><div class="k">Structure kept</div></div>
+              <div class="stat enh"><div class="v" id="s-color">–</div><div class="k">Color inferred</div></div>
               <div class="stat fab"><div class="v" id="s-fab">–</div><div class="k">Fabricated</div></div>
               <div class="stat"><div class="v" id="s-conf">–</div><div class="k">Confidence</div></div>
             </div>
@@ -244,7 +244,7 @@ let RES=null;
 function renderResult(res){ RES=res; $('#result').classList.remove('hidden');
   setMode('restored');
   const s=res.stats||{};
-  $('#s-org').textContent=(s.pct_original??'–')+'%'; $('#s-enh').textContent=(s.pct_enhanced??'–')+'%';
+  $('#s-org').textContent=(s.pct_original??'–')+'%'; $('#s-color').textContent=(s.pct_color_inferred??'–')+'%';
   $('#s-fab').textContent=(s.pct_fabricated??'–')+'%'; $('#s-conf').textContent=Math.round((s.mean_confidence??0)*100)+'%';
   $('#disclosure').textContent=res.disclosure||'';
   const m=res.manifest||{};

@@ -105,10 +105,13 @@ def detect_damage(original_rgb: np.ndarray) -> np.ndarray:
 # -------------------------------------------------------- authenticity map
 @dataclass
 class Authenticity:
-    pct_original: float
-    pct_enhanced: float
-    pct_fabricated: float
-    mean_confidence: float
+    # STRUCTURE axis (from luminance / explicit fabricated regions)
+    pct_original: float          # structure preserved from the master
+    pct_enhanced: float          # real signal, cleaned
+    pct_fabricated: float        # structure invented (inpaint/hallucination)
+    # COLOR axis (a grayscale master has no color, so any color is inferred)
+    pct_color_inferred: float
+    mean_confidence: float       # colorizer agreement (1 = fully grounded)
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -118,14 +121,19 @@ class Authenticity:
 def classify(original_rgb: np.ndarray, final_rgb: np.ndarray, *,
              confidence: np.ndarray | None = None,
              fabricated_regions: dict[str, np.ndarray] | None = None,
-             lum_enhance_thresh: int = 6, lum_fab_thresh: int = 28,
+             lum_enhance_thresh: int = 10, lum_fab_thresh: int = 45,
              sat_thresh: int = 12) -> tuple[np.ndarray, Authenticity]:
     """Return (class_map HxW uint8, Authenticity stats).
 
-    - Luminance change small  -> ENHANCED (real signal, cleaned)
-    - Luminance change large   -> FABRICATED (structure invented)
-    - Any added chroma on a gray master -> FABRICATED (color inferred)
-    - Explicit op regions (e.g. inpaint masks) -> FABRICATED
+    Two independent axes are measured honestly:
+      STRUCTURE (from luminance change vs the master):
+        small change  -> ENHANCED (real signal, cleaned)
+        large change   -> FABRICATED (structure invented)
+        explicit op regions (inpaint masks) -> FABRICATED
+      COLOR: a grayscale master has no chroma, so any color in the result is
+        AI-inferred. We report the share of the image that carries inferred color.
+    Because colorization is luminance-locked, STRUCTURE stays ~100% original;
+    the fabrication is the color layer, whose trustworthiness is the confidence map.
     """
     h, w = original_rgb.shape[:2]
     final = _resize_to(final_rgb, h, w)
@@ -133,30 +141,31 @@ def classify(original_rgb: np.ndarray, final_rgb: np.ndarray, *,
     f_lab = cv2.cvtColor(final, cv2.COLOR_RGB2LAB).astype(np.int16)
 
     dL = np.abs(f_lab[:, :, 0] - o_lab[:, :, 0])
-    # chroma present in FINAL (original is ~neutral gray so any sat is added)
     sat = np.sqrt((f_lab[:, :, 1] - 128.0) ** 2 + (f_lab[:, :, 2] - 128.0) ** 2)
 
+    # --- structure classification (NOT driven by color) ---
     cls = np.full((h, w), ORIGINAL, np.uint8)
     cls[dL >= lum_enhance_thresh] = ENHANCED
-    cls[sat >= sat_thresh] = FABRICATED           # color is inferred
-    cls[dL >= lum_fab_thresh] = FABRICATED         # structure changed
+    cls[dL >= lum_fab_thresh] = FABRICATED
     if fabricated_regions:
         for m in fabricated_regions.values():
             cls[_resize_to(m, h, w) > 127] = FABRICATED
 
     total = h * w
     pct = lambda v: round(100.0 * float(np.count_nonzero(cls == v)) / total, 1)
-    notes: list[str] = []
-    if (sat >= sat_thresh).mean() > 0.5:
-        notes.append("All color is AI-inferred; original is grayscale.")
+    color_inferred = round(100.0 * float(np.count_nonzero(sat >= sat_thresh)) / total, 1)
+
+    notes: list[str] = ["Structure preserved from the master (luminance locked)."]
+    if color_inferred > 1:
+        notes.append(f"All color is AI-inferred; ~{color_inferred:.0f}% of the image carries added color.")
     if fabricated_regions:
         notes.append(f"{len(fabricated_regions)} region(s) reconstructed (damage repair).")
     mean_conf = float(confidence.mean()) if confidence is not None else 1.0
-    if confidence is not None and mean_conf < 0.8:
-        notes.append("Low colorizer agreement in places — flagged as a guess.")
+    if confidence is not None and mean_conf < 0.85:
+        notes.append("Colorizers disagree in places — those colors are flagged as guesses.")
 
     return cls, Authenticity(pct(ORIGINAL), pct(ENHANCED), pct(FABRICATED),
-                             round(mean_conf, 3), notes)
+                             color_inferred, round(mean_conf, 3), notes)
 
 
 # ------------------------------------------------------------- rendering

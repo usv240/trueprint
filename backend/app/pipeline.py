@@ -225,10 +225,14 @@ class RestorePipeline:
     # ------------------------------------------------------------- utilities
     @staticmethod
     def _disclosure(stats: A.Authenticity, analysis: dict) -> str:
-        parts = [f"This image was digitally restored with AI. ~{stats.pct_fabricated:.0f}% of pixels "
-                 f"are AI-inferred, including all color."]
+        parts = [f"This image was digitally restored with AI. The original structure is preserved "
+                 f"(luminance locked to the master); all color is AI-inferred "
+                 f"(~{stats.pct_color_inferred:.0f}% of the image carries added color, mean colorizer "
+                 f"confidence {stats.mean_confidence * 100:.0f}%)."]
         if analysis.get("uncertain_colors"):
             parts.append("Colors of " + ", ".join(analysis["uncertain_colors"][:3]) + " are guesses.")
+        if stats.pct_fabricated >= 1:
+            parts.append(f"~{stats.pct_fabricated:.0f}% of structure was reconstructed (damage repair).")
         parts.append("The original master is preserved unaltered on Backblaze B2.")
         return " ".join(parts)
 
