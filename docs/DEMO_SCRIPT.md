@@ -34,8 +34,10 @@ restored file for the "tamper" beat (or flip one byte).
 ### 2:05–2:45 · Prove it (C2PA + B2 + Verify)
 *Screen: the provenance panel — point at the green "C2PA Content Credential embedded" badge. Click "Download signed (C2PA)."*
 > "Every restoration is signed with a real, embedded C2PA Content Credential — the industry standard behind Adobe, the BBC and the New York Times. It declares the AI color edit in machine-readable form, which is exactly what the EU AI Act now requires."
+*Screen: click the Collection tab — the B2 ledger grid, each card showing color %, confidence, ✓ faithful, C2PA.*
+> "And every restoration is a durable record on Backblaze B2 — a queryable provenance ledger of masters, restorations, and signed manifests. This is the system of record."
 *Screen: drop the signed file into contentcredentials.org/verify (or our /verify).*
-> "So I can verify it anywhere — here in Adobe's own Content Credentials tool — and it shows what AI did. All of it also lives on Backblaze B2: the immutable master, the restoration, the manifest."
+> "I can verify it anywhere — here in Adobe's own Content Credentials tool — and it shows what AI did."
 *Our `/verify`: green.* Then flip one byte / drop a different file → *red.*
 > "Trust travels with the file. Tamper with even one byte…" *(red)* "…and it's caught."
 

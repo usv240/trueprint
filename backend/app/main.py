@@ -123,6 +123,46 @@ def cached(name: str):
     return _result_payload(entry["asset_id"], entry["run_id"])
 
 
+@app.get("/api/catalog")
+def catalog(limit: int = 24):
+    """The B2 provenance ledger: every restoration with its authenticity + verdicts."""
+    try:
+        lines = store().get("index/catalog.jsonl").decode().splitlines()
+    except Exception:
+        return []
+    out, seen_files = [], set()
+    for line in reversed(lines):  # newest first
+        try:
+            e = json.loads(line)
+        except Exception:
+            continue
+        aid, rid, fn = e.get("asset_id"), e.get("run_id"), e.get("filename")
+        if not aid or not rid or fn in seen_files:   # newest run per photo only
+            continue
+        base = f"derivatives/{aid}/{rid}"
+        try:
+            man = json.loads(store().get(f"{base}/manifest.json"))
+        except Exception:
+            continue
+        auth, ver, c2 = man.get("authenticity", {}), man.get("verification", {}), man.get("c2pa", {})
+        if auth.get("pct_color_inferred") is None:   # skip incomplete/legacy runs
+            continue
+        seen_files.add(fn)
+        out.append({
+            "asset_id": aid, "run_id": rid, "filename": e.get("filename"),
+            "created": man.get("created"),
+            "color_inferred": auth.get("pct_color_inferred"),
+            "confidence": auth.get("mean_confidence"),
+            "faithful": ver.get("passed"), "faithful_score": ver.get("score"),
+            "c2pa": bool(c2.get("embedded")),
+            "master_sha256": (man.get("master", {}).get("sha256") or "")[:12],
+            "thumb": store().url(f"{base}/restored.png"),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 @app.get("/api/sample/{name}")
 def sample_img(name: str):
     p = (SAMPLES / name).resolve()
