@@ -1,0 +1,734 @@
+<title>Trueprint — Provenance-first restoration for the world's archives</title>
+
+<style>
+  /* ============================ TOKENS ============================ */
+  :root{
+    --bg:#EAE7DF; --surface:#F4F2EC; --surface-2:#FBFAF6; --line:#D6D1C4;
+    --text:#181C1D; --muted:#565E5E; --faint:#8A928F;
+    --verify:#0F877C; --enhanced:#AD7813; --fabricated:#C43D19;
+    --accent:var(--verify); --accent-ink:#083b37;
+    --grain:.035;
+    --font-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --maxw:1120px;
+    --r:14px; --r-sm:9px;
+    --shadow:0 1px 0 rgba(0,0,0,.03), 0 10px 30px -18px rgba(20,30,30,.45);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0D1113; --surface:#141A1C; --surface-2:#1A2124; --line:#28312F;
+      --text:#E9ECE9; --muted:#9AA6A3; --faint:#63706D;
+      --verify:#33C2B4; --enhanced:#E4B14E; --fabricated:#F06A42;
+      --accent:var(--verify); --accent-ink:#04100f;
+      --grain:.05;
+      --shadow:0 1px 0 rgba(255,255,255,.02), 0 24px 50px -28px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#EAE7DF; --surface:#F4F2EC; --surface-2:#FBFAF6; --line:#D6D1C4;
+    --text:#181C1D; --muted:#565E5E; --faint:#8A928F;
+    --verify:#0F877C; --enhanced:#AD7813; --fabricated:#C43D19; --accent:var(--verify); --accent-ink:#083b37; --grain:.035;
+    --shadow:0 1px 0 rgba(0,0,0,.03), 0 10px 30px -18px rgba(20,30,30,.45);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D1113; --surface:#141A1C; --surface-2:#1A2124; --line:#28312F;
+    --text:#E9ECE9; --muted:#9AA6A3; --faint:#63706D;
+    --verify:#33C2B4; --enhanced:#E4B14E; --fabricated:#F06A42; --accent:var(--verify); --accent-ink:#04100f; --grain:.05;
+    --shadow:0 1px 0 rgba(255,255,255,.02), 0 24px 50px -28px rgba(0,0,0,.8);
+  }
+
+  /* ============================ BASE ============================ */
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--font-sans); font-size:17px; line-height:1.6;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+  }
+  /* film-grain + registration wash */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:var(--grain);
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    mix-blend-mode:overlay;
+  }
+  main,header,footer{position:relative; z-index:1}
+  a{color:inherit; text-decoration:none}
+  h1,h2,h3{text-wrap:balance; margin:0; font-weight:600}
+  p{margin:0}
+  img,svg{max-width:100%}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent)}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:4px}
+
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+  .eyebrow{font-family:var(--font-mono); font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+  .serif{font-family:var(--font-display)}
+  .mono{font-family:var(--font-mono)}
+
+  /* ============================ NAV ============================ */
+  header{position:sticky; top:0; z-index:50; backdrop-filter:blur(10px);
+    background:color-mix(in srgb, var(--bg) 82%, transparent); border-bottom:1px solid var(--line)}
+  .nav{display:flex; align-items:center; gap:22px; height:64px}
+  .brand{display:flex; align-items:center; gap:10px; font-family:var(--font-display); font-size:20px; letter-spacing:.01em; font-weight:600}
+  .brand .glyph{width:22px; height:22px; flex:0 0 auto}
+  .nav .links{display:flex; gap:20px; margin-left:14px}
+  .nav .links a{font-size:14.5px; color:var(--muted)}
+  .nav .links a:hover{color:var(--text)}
+  .nav .spacer{flex:1}
+  @media (max-width:860px){ .nav .links{display:none} }
+
+  /* ============================ BUTTONS + INFO TOOLTIP ============================ */
+  .act{position:relative; display:inline-flex; align-items:center; gap:6px}
+  .btn{display:inline-flex; align-items:center; gap:9px; font-family:var(--font-sans);
+    font-size:15px; font-weight:550; padding:11px 18px; border-radius:var(--r-sm);
+    border:1px solid transparent; cursor:pointer; transition:transform .15s ease, background .2s, border-color .2s, box-shadow .2s}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--accent); color:var(--accent-ink); font-weight:650}
+  .btn-primary:hover{box-shadow:0 8px 24px -10px color-mix(in srgb, var(--accent) 70%, transparent)}
+  .btn-ghost{background:transparent; color:var(--text); border-color:var(--line)}
+  .btn-ghost:hover{border-color:var(--accent); color:var(--accent)}
+  .btn .arrow{transition:transform .15s ease}
+  .btn:hover .arrow{transform:translateX(3px)}
+
+  .info{width:20px; height:20px; flex:0 0 auto; border-radius:50%; border:1px solid var(--line);
+    background:var(--surface); color:var(--muted); font-family:var(--font-mono); font-size:11px; font-style:italic;
+    font-weight:700; line-height:1; display:inline-flex; align-items:center; justify-content:center; cursor:help;
+    transition:border-color .2s, color .2s, background .2s}
+  .info:hover, .info:focus-visible{border-color:var(--accent); color:var(--accent); background:var(--surface-2)}
+  .pop{position:absolute; bottom:calc(100% + 12px); left:50%; transform:translateX(-50%) translateY(6px);
+    width:min(280px, 78vw); background:var(--surface-2); color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:11px 13px; font-size:13px; line-height:1.5; box-shadow:var(--shadow);
+    opacity:0; visibility:hidden; transition:opacity .18s ease, transform .18s ease; z-index:60; pointer-events:none}
+  .pop::after{content:""; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:var(--surface-2)}
+  .pop .k{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); display:block; margin-bottom:4px}
+  .info:hover + .pop, .info:focus-visible + .pop, .info:focus + .pop{opacity:1; visibility:visible; transform:translateX(-50%) translateY(0)}
+  .pop:hover{opacity:1; visibility:visible}
+  @media (max-width:520px){ .pop{left:auto; right:-8px; transform:translateY(6px)} .pop::after{left:auto; right:16px} .info:hover + .pop,.info:focus + .pop,.info:focus-visible + .pop{transform:translateY(0)} }
+
+  /* ============================ SECTIONS ============================ */
+  section{padding:88px 0}
+  .sec-head{max-width:720px; margin-bottom:44px; display:flex; flex-direction:column; gap:14px}
+  .sec-head h2{font-family:var(--font-display); font-size:clamp(28px,4.2vw,42px); line-height:1.1}
+  .sec-head p{color:var(--muted); font-size:18px}
+  .rule{height:1px; background:var(--line); border:0; margin:0}
+
+  /* ============================ HERO ============================ */
+  .hero{padding:64px 0 40px}
+  .hero-grid{display:grid; grid-template-columns:1.05fr .95fr; gap:56px; align-items:center}
+  @media (max-width:940px){ .hero-grid{grid-template-columns:1fr; gap:40px} }
+  .hero h1{font-family:var(--font-display); font-size:clamp(34px,5.4vw,60px); line-height:1.04; letter-spacing:-.01em; margin:18px 0 20px}
+  .hero h1 em{font-style:italic; color:var(--accent)}
+  .hero .lede{font-size:19px; color:var(--muted); max-width:36ch}
+  .hero-cta{display:flex; flex-wrap:wrap; gap:14px; margin-top:30px}
+  .badges{display:flex; flex-wrap:wrap; gap:8px; margin-top:30px}
+  .chip{font-family:var(--font-mono); font-size:11.5px; letter-spacing:.06em; color:var(--muted);
+    border:1px solid var(--line); border-radius:100px; padding:5px 11px; background:color-mix(in srgb,var(--surface) 60%, transparent)}
+
+  /* ---- specimen (interactive hero visual) ---- */
+  .specimen{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px; box-shadow:var(--shadow)}
+  .specimen-top{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px}
+  .seg{display:inline-flex; background:var(--bg); border:1px solid var(--line); border-radius:100px; padding:3px}
+  .seg button{font-family:var(--font-mono); font-size:11.5px; letter-spacing:.05em; text-transform:uppercase;
+    border:0; background:transparent; color:var(--muted); padding:7px 13px; border-radius:100px; cursor:pointer; transition:.18s}
+  .seg button[aria-pressed="true"]{background:var(--surface-2); color:var(--text); box-shadow:0 1px 0 rgba(0,0,0,.04)}
+  .stage{position:relative; aspect-ratio:4/5; border-radius:8px; overflow:hidden; background:#1b1712}
+  .stage svg{display:block; width:100%; height:100%}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:12.5px; color:var(--muted)}
+  .legend .dot{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:baseline}
+  .legend .item{display:none; align-items:center}
+  .stage[data-mode="auth"] ~ .legend .item{display:inline-flex}
+  .cap{font-family:var(--font-mono); font-size:11px; color:var(--faint); margin-top:10px; letter-spacing:.03em}
+
+  /* specimen svg state visibility */
+  .layer{transition:opacity .5s ease}
+  .stage[data-mode="damaged"] .l-damage{opacity:1} .stage .l-damage{opacity:0}
+  .stage[data-mode="restored"] .l-clean{opacity:1}
+  .stage[data-mode="auth"] .l-clean{opacity:1}
+  .stage:not([data-mode="damaged"]) .l-clean{opacity:1}
+  .stage[data-mode="damaged"] .l-clean{opacity:0}
+  .stage .l-auth{opacity:0} .stage[data-mode="auth"] .l-auth{opacity:1}
+  .stage[data-mode="auth"] .scan{opacity:1}
+  .scan{opacity:0}
+  .region{cursor:help}
+  .region rect,.region path{transition:opacity .2s}
+  .region:hover .rfill{opacity:.62 !important}
+
+  /* ============================ QUOTE BAR ============================ */
+  .quotebar{border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:color-mix(in srgb,var(--surface) 45%, transparent)}
+  .quotebar .wrap{padding-top:26px; padding-bottom:26px; display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap}
+  .quotebar .q{font-family:var(--font-display); font-style:italic; font-size:20px; line-height:1.4; max-width:760px}
+  .quotebar cite{font-family:var(--font-mono); font-size:12px; letter-spacing:.05em; color:var(--muted); font-style:normal}
+
+  /* ============================ CARDS / GRIDS ============================ */
+  .grid{display:grid; gap:18px}
+  .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media (max-width:920px){ .g3,.g4{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:600px){ .g2,.g3,.g4{grid-template-columns:1fr} }
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:22px; display:flex; flex-direction:column; gap:10px}
+  .card h3{font-size:18px; font-family:var(--font-sans); font-weight:650}
+  .card p{color:var(--muted); font-size:15px}
+  .card .tag{font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase}
+
+  /* class cards */
+  .cls{border-top:3px solid var(--l)}
+  .cls .tag{color:var(--l)}
+  .cls[data-c="original"]{--l:var(--verify)} .cls[data-c="enhanced"]{--l:var(--enhanced)} .cls[data-c="fabricated"]{--l:var(--fabricated)}
+
+  /* pipeline */
+  .pipe{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+  @media (max-width:820px){ .pipe{grid-template-columns:1fr} }
+  .step{position:relative; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:20px; display:flex; flex-direction:column; gap:8px}
+  .step .n{font-family:var(--font-mono); font-size:12px; color:var(--accent); letter-spacing:.1em}
+  .step h3{font-size:16.5px; font-weight:650}
+  .step p{color:var(--muted); font-size:14px}
+  .step .modal{align-self:flex-start; margin-top:2px; font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; padding:3px 8px; border-radius:100px; border:1px solid var(--line); color:var(--muted)}
+
+  /* table */
+  .tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--r)}
+  table{border-collapse:collapse; width:100%; min-width:620px; font-size:14.5px}
+  th,td{text-align:left; padding:14px 16px; border-bottom:1px solid var(--line); vertical-align:top}
+  thead th{font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); background:color-mix(in srgb,var(--surface) 50%, transparent)}
+  tbody tr:last-child td{border-bottom:0}
+  td .op{font-family:var(--font-mono); font-weight:700}
+  td .op.fab{color:var(--fabricated)} td .op.enh{color:var(--enhanced)} td .op.org{color:var(--verify)}
+
+  /* manifest / provenance */
+  .prov{display:grid; grid-template-columns:1fr 1fr; gap:22px; align-items:stretch}
+  @media (max-width:820px){ .prov{grid-template-columns:1fr} }
+  .manifest{background:#0e1416; color:#d7e0dd; border:1px solid var(--line); border-radius:var(--r); overflow:hidden; box-shadow:var(--shadow)}
+  :root[data-theme="light"] .manifest{background:#10171a}
+  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .manifest{background:#10171a} }
+  .manifest .mtop{display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid #223; background:#0a0f11}
+  .manifest .mtop .d{width:10px; height:10px; border-radius:50%; background:#2a3b3a}
+  .manifest .mtop span{font-family:var(--font-mono); font-size:11px; color:#7f908c; letter-spacing:.08em; margin-left:6px}
+  .manifest pre{margin:0; padding:16px; overflow-x:auto; font-family:var(--font-mono); font-size:12.5px; line-height:1.7; color:#cdd8d4}
+  .manifest .kk{color:#6fd6c9} .manifest .vv{color:#e7c07a} .manifest .cc{color:#f0876a} .manifest .oo{color:#9fb0ab}
+
+  .feature-list{display:flex; flex-direction:column; gap:14px}
+  .feature-list .fl{display:flex; gap:13px; align-items:flex-start}
+  .feature-list .fl .mk{flex:0 0 auto; width:26px; height:26px; border-radius:7px; display:grid; place-items:center; background:color-mix(in srgb,var(--accent) 16%, transparent); color:var(--accent); font-family:var(--font-mono); font-weight:700; font-size:13px; margin-top:2px}
+  .feature-list .fl h3{font-size:16px; font-weight:650; margin-bottom:2px}
+  .feature-list .fl p{color:var(--muted); font-size:14.5px}
+
+  /* built-on */
+  .stack .card .tag{color:var(--accent)}
+  .stack .card ul{margin:6px 0 0; padding-left:18px; color:var(--muted); font-size:14px}
+  .stack .card li{margin:3px 0}
+
+  /* learn / glossary */
+  details{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); overflow:hidden}
+  details + details{margin-top:10px}
+  summary{list-style:none; cursor:pointer; padding:16px 18px; display:flex; align-items:center; justify-content:space-between; gap:14px; font-weight:600}
+  summary::-webkit-details-marker{display:none}
+  summary .term{display:flex; align-items:center; gap:10px}
+  summary .plus{font-family:var(--font-mono); color:var(--accent); transition:transform .2s; flex:0 0 auto}
+  details[open] summary .plus{transform:rotate(45deg)}
+  details .def{padding:0 18px 18px; color:var(--muted); font-size:15px; line-height:1.6}
+  details .def .mono{color:var(--text)}
+
+  /* CTA band */
+  .band{background:var(--surface); border:1px solid var(--line); border-radius:20px; padding:44px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:18px}
+  .band h2{font-family:var(--font-display); font-size:clamp(26px,4vw,38px)}
+  .band p{color:var(--muted); max-width:52ch}
+  .band .hero-cta{justify-content:center}
+
+  /* footer */
+  footer{border-top:1px solid var(--line); padding:40px 0 56px; margin-top:20px}
+  .foot{display:flex; justify-content:space-between; gap:24px; flex-wrap:wrap; align-items:flex-start}
+  .foot .fnote{color:var(--faint); font-size:13px; max-width:44ch; line-height:1.6}
+  .foot .fcol{display:flex; flex-direction:column; gap:8px; font-size:14px}
+  .foot .fcol .h{font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:4px}
+  .foot .fcol a{color:var(--muted)} .foot .fcol a:hover{color:var(--text)}
+
+  /* reveal on scroll */
+  [data-reveal]{opacity:0; transform:translateY(16px); transition:opacity .6s ease, transform .6s ease}
+  [data-reveal].in{opacity:1; transform:none}
+  @media (prefers-reduced-motion: reduce){ [data-reveal]{opacity:1; transform:none; transition:none} .scan{display:none} }
+</style>
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="#top" aria-label="Trueprint home">
+      <svg class="glyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="3" stroke="var(--accent)" stroke-width="1.5"/>
+        <path d="M6 12.5 10 16.5 18 7.5" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Trueprint
+    </a>
+    <nav class="links" aria-label="Primary">
+      <a href="#problem">Problem</a>
+      <a href="#how">How it works</a>
+      <a href="#map">Authenticity map</a>
+      <a href="#provenance">Provenance</a>
+      <a href="#audiences">Who it's for</a>
+      <a href="#learn">Learn</a>
+    </nav>
+    <div class="spacer"></div>
+    <span class="act">
+      <a class="btn btn-primary" href="#try">Try the demo <span class="arrow">→</span></a>
+      <button class="info" aria-label="What does Try the demo do?">i</button>
+      <span class="pop" role="tooltip"><span class="k">Try the demo</span>Opens the live app: upload a damaged photo, watch the Genblaze pipeline restore it across multiple AI providers, then reveal the authenticity map showing what's real vs. invented.</span>
+    </span>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow">Provenance-first restoration · Backblaze B2 + Genblaze</span>
+        <h1>AI restoration invents history. Trueprint proves what's&nbsp;<em>real</em>.</h1>
+        <p class="lede">Restore old photos and audio like the best AI tools — then get a cryptographically verifiable record of exactly which pixels are original, which are enhanced, and which the AI fabricated.</p>
+
+        <div class="hero-cta">
+          <span class="act">
+            <a class="btn btn-primary" href="#try">Try the demo <span class="arrow">→</span></a>
+            <button class="info" aria-label="What does Try the demo do?">i</button>
+            <span class="pop" role="tooltip"><span class="k">Try the demo</span>Upload a damaged photo and watch the restoration pipeline run live, step by step, across multiple providers — ending with the authenticity map and a downloadable provenance record.</span>
+          </span>
+          <span class="act">
+            <a class="btn btn-ghost" href="#verify-file">Verify a file</a>
+            <button class="info" aria-label="What does Verify a file do?">i</button>
+            <span class="pop" role="tooltip"><span class="k">Verify a file</span>Drop in any Trueprint image — even one downloaded elsewhere — to read its embedded provenance manifest and re-check its hash against the archive. Detects any tampering.</span>
+          </span>
+          <span class="act">
+            <a class="btn btn-ghost" href="#try">Watch 3-min demo</a>
+            <button class="info" aria-label="What does Watch demo do?">i</button>
+            <span class="pop" role="tooltip"><span class="k">Watch the demo</span>A three-minute walkthrough: problem → live restoration → the authenticity reveal → provenance on Backblaze B2 → tamper verification.</span>
+          </span>
+        </div>
+
+        <div class="badges" aria-label="Standards and platforms">
+          <span class="chip">Backblaze B2</span>
+          <span class="chip">Genblaze SDK</span>
+          <span class="chip">C2PA-aligned</span>
+          <span class="chip">EU AI Act · Art. 50</span>
+          <span class="chip">OAIS archive model</span>
+        </div>
+      </div>
+
+      <!-- interactive specimen -->
+      <div class="specimen" aria-label="Interactive restoration specimen">
+        <div class="specimen-top">
+          <div class="seg" role="group" aria-label="View mode">
+            <button data-set="damaged" aria-pressed="false">Damaged</button>
+            <button data-set="restored" aria-pressed="true">Restored</button>
+            <button data-set="auth" aria-pressed="false">Authenticity</button>
+          </div>
+          <span class="act">
+            <button class="info" aria-label="What do these modes show?">i</button>
+            <span class="pop" role="tooltip"><span class="k">Three views</span><b>Damaged</b>: the original degraded scan. <b>Restored</b>: the AI-restored result. <b>Authenticity</b>: the same result with a heatmap revealing what was invented — teal = original, amber = enhanced, vermilion = AI-fabricated.</span>
+          </span>
+        </div>
+
+        <div class="stage" id="stage" data-mode="restored" aria-live="polite">
+          <svg viewBox="0 0 400 500" role="img" aria-label="A stylized archival portrait shown in the selected view">
+            <defs>
+              <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#4a4036"/><stop offset="1" stop-color="#2a231b"/>
+              </linearGradient>
+              <linearGradient id="bgc" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#6f7d86"/><stop offset="1" stop-color="#3f4a52"/>
+              </linearGradient>
+              <radialGradient id="face" cx="50%" cy="42%" r="60%">
+                <stop offset="0" stop-color="#d8c3a6"/><stop offset="1" stop-color="#9d8467"/>
+              </radialGradient>
+              <filter id="soft"><feGaussianBlur stdDeviation="1.1"/></filter>
+            </defs>
+
+            <!-- clean / restored base -->
+            <g class="layer l-clean">
+              <rect width="400" height="500" fill="url(#bgc)"/>
+              <ellipse cx="200" cy="330" rx="150" ry="150" fill="#26313a"/>
+              <path d="M120 500 V405 C120 350 165 320 200 320 C235 320 280 350 280 405 V500 Z" fill="#33414c"/>
+              <ellipse cx="200" cy="205" rx="72" ry="86" fill="url(#face)"/>
+              <path d="M138 175 C150 120 250 120 262 175 C266 150 245 108 200 108 C155 108 134 150 138 175Z" fill="#4a3b2c"/>
+              <ellipse cx="176" cy="205" rx="7" ry="5" fill="#3a2e22"/>
+              <ellipse cx="224" cy="205" rx="7" ry="5" fill="#3a2e22"/>
+              <path d="M186 250 Q200 258 214 250" stroke="#6d5540" stroke-width="3" fill="none" stroke-linecap="round"/>
+            </g>
+
+            <!-- damage overlay -->
+            <g class="layer l-damage">
+              <rect width="400" height="500" fill="url(#bg)"/>
+              <ellipse cx="200" cy="330" rx="150" ry="150" fill="#241d15"/>
+              <path d="M120 500 V405 C120 350 165 320 200 320 C235 320 280 350 280 405 V500 Z" fill="#2c241a"/>
+              <ellipse cx="200" cy="205" rx="72" ry="86" fill="#8a745a" filter="url(#soft)"/>
+              <path d="M138 175 C150 120 250 120 262 175 C266 150 245 108 200 108 C155 108 134 150 138 175Z" fill="#3a2e20"/>
+              <ellipse cx="176" cy="205" rx="7" ry="5" fill="#2c2318"/>
+              <ellipse cx="224" cy="205" rx="7" ry="5" fill="#2c2318"/>
+              <!-- cracks / tears -->
+              <path d="M40 60 L150 230 L120 300 L210 470" stroke="#0c0a07" stroke-width="2.4" fill="none" opacity=".8"/>
+              <path d="M360 30 L300 160 L330 250" stroke="#0c0a07" stroke-width="1.8" fill="none" opacity=".7"/>
+              <path d="M0 420 L90 380 L140 430" stroke="#0c0a07" stroke-width="2" fill="none" opacity=".7"/>
+              <rect x="250" y="70" width="120" height="60" fill="#0c0a07" opacity=".5" transform="rotate(8 300 100)"/>
+              <circle cx="110" cy="150" r="26" fill="#0c0a07" opacity=".35"/>
+            </g>
+
+            <!-- authenticity overlay -->
+            <g class="layer l-auth">
+              <g class="region"><title>Face — AI-reconstructed from a face prior · high fabrication</title>
+                <ellipse class="rfill" cx="200" cy="205" rx="72" ry="86" fill="var(--fabricated)" opacity=".42"/>
+                <ellipse cx="200" cy="205" rx="72" ry="86" fill="none" stroke="var(--fabricated)" stroke-width="1.5"/>
+              </g>
+              <g class="region"><title>Background & clothing color — all chroma is AI-inferred · two colorizers disagreed here</title>
+                <path class="rfill" d="M0 0 H400 V500 H0 Z M128 119 A72 86 0 0 0 272 119 M120 500 V405 C120 350 165 320 200 320 C235 320 280 350 280 405 V500" fill="var(--fabricated)" opacity=".16" fill-rule="evenodd"/>
+                <rect class="rfill" x="120" y="330" width="160" height="170" fill="var(--enhanced)" opacity=".30"/>
+                <rect x="120" y="330" width="160" height="170" fill="none" stroke="var(--enhanced)" stroke-width="1.3"/>
+              </g>
+              <g class="region"><title>Eyes & mouth — original detail preserved from the master · verified</title>
+                <rect class="rfill" x="160" y="192" width="80" height="72" fill="var(--verify)" opacity=".30"/>
+                <rect x="160" y="192" width="80" height="72" fill="none" stroke="var(--verify)" stroke-width="1.3"/>
+              </g>
+              <!-- corner registration marks -->
+              <g stroke="var(--verify)" stroke-width="1.4" opacity=".9">
+                <path d="M14 14 h20 M14 14 v20"/><path d="M386 14 h-20 M386 14 v20"/>
+                <path d="M14 486 h20 M14 486 v-20"/><path d="M386 486 h-20 M386 486 v-20"/>
+              </g>
+            </g>
+
+            <!-- scan line -->
+            <rect class="scan" x="0" y="0" width="400" height="3" fill="var(--verify)" opacity=".8">
+              <animate attributeName="y" values="0;497;0" dur="3.2s" repeatCount="indefinite"/>
+            </rect>
+          </svg>
+        </div>
+
+        <div class="legend" aria-hidden="false">
+          <span class="item"><span class="dot" style="background:var(--verify)"></span>Original</span>
+          <span class="item"><span class="dot" style="background:var(--enhanced)"></span>Enhanced</span>
+          <span class="item"><span class="dot" style="background:var(--fabricated)"></span>Fabricated</span>
+        </div>
+        <div class="cap" id="cap">RESTORED · sha256:9f3c…a1b7 · 6 steps · 4 providers</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== QUOTE ===================== -->
+  <div class="quotebar">
+    <div class="wrap">
+      <p class="q">A 2026 Library of Congress call-to-action urges libraries, archives, and museums to keep AI-affected collections authentic, transparent, and verifiable — from creation through access. Trueprint is built for exactly that.</p>
+      <cite>Paraphrased from “Content Authenticity &amp; Provenance in the Age of AI: A Call-to-Action for the LAMs Community,” The Signal, Library of Congress, 2026 · <a href="https://blogs.loc.gov/thesignal/2026/04/content-authenticity-and-provenance-in-the-age-of-artificial-intelligence-a-call-to-action-for-the-libraries-archives-and-museums-community/" style="color:var(--accent)">source</a></cite>
+    </div>
+  </div>
+
+  <!-- ===================== PROBLEM ===================== -->
+  <section id="problem">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">The problem</span>
+        <h2>Restoration doesn't recover the past. It guesses it — silently.</h2>
+        <p>When an AI colorizes a 1920s photograph, it isn't recovering the true color of a dress or a storefront sign. It's inventing a beautiful, plausible fiction. The moment that version circulates, the historical record is quietly corrupted — and no one can tell which parts were real.</p>
+      </div>
+      <div class="grid g3">
+        <div class="card">
+          <span class="tag" style="color:var(--fabricated)">Invented, not recovered</span>
+          <h3>Colorization is a guess</h3>
+          <p>A black-and-white master contains no color data. Every hue an AI adds is inferred from what "looks right" — not from the original scene.</p>
+        </div>
+        <div class="card">
+          <span class="tag" style="color:var(--fabricated)">Detail from nowhere</span>
+          <h3>Upscaling hallucinates</h3>
+          <p>Super-resolution and face restoration fabricate fine detail that never existed in the source, rebuilding faces from a generic prior.</p>
+        </div>
+        <div class="card">
+          <span class="tag" style="color:var(--fabricated)">No paper trail</span>
+          <h3>Consumer tools are provenance-blind</h3>
+          <p>Remini, MyHeritage, Palette.fm and others give you a pretty result with zero record of what changed. Institutions can't cite what they can't verify.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule"/>
+
+  <!-- ===================== THREE CLASSES ===================== -->
+  <section id="classes">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">The core idea</span>
+        <h2>Every pixel gets a verdict: original, enhanced, or fabricated.</h2>
+        <p>Trueprint classifies the restored image at the region level, so trust is never all-or-nothing. This three-class model is the language of the whole product.</p>
+      </div>
+      <div class="grid g3">
+        <div class="card cls" data-c="original">
+          <span class="tag">Original</span>
+          <h3>Real signal, preserved</h3>
+          <p>Pixels carried through from the master untouched, within tolerance. This is genuine historical data — the part you can cite without an asterisk.</p>
+        </div>
+        <div class="card cls" data-c="enhanced">
+          <span class="tag">Enhanced</span>
+          <h3>Real signal, cleaned</h3>
+          <p>Original data that was denoised, de-scratched, or contrast-corrected. Nothing invented — the underlying signal is real, just clarified.</p>
+        </div>
+        <div class="card cls" data-c="fabricated">
+          <span class="tag">Fabricated</span>
+          <h3>Invented by AI</h3>
+          <p>Content with no basis in the master: inpainted damage, all colorized chroma, hallucinated detail, reconstructed faces. Beautiful — but a guess.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule"/>
+
+  <!-- ===================== HOW IT WORKS ===================== -->
+  <section id="how">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">How it works · the pipeline</span>
+        <h2>One orchestrated pipeline, many specialist models.</h2>
+        <p>Genblaze chains best-in-class providers into a single restoration run. Each step declares fallback models, so a provider outage degrades gracefully instead of failing — and every step is recorded in a hash-verified lineage.</p>
+      </div>
+      <div class="pipe">
+        <div class="step"><span class="n">STEP 01</span><h3>Analyze &amp; detect damage</h3><p>A vision model reads the scan: describes the scene, finds scratches, tears and holes, and emits a damage mask that drives the repair.</p><span class="modal">Vision LLM</span></div>
+        <div class="step"><span class="n">STEP 02</span><h3>Repair &amp; inpaint</h3><p>An image-to-image model fills damaged regions. The damage mask fed <em>in</em> becomes the fabrication record <em>out</em> — provenance captured at the source.</p><span class="modal">Image</span></div>
+        <div class="step"><span class="n">STEP 03</span><h3>Reconstruct faces</h3><p>When faces are present, a face-restoration pass rebuilds detail from a prior. The face region is logged as high-fabrication automatically.</p><span class="modal">Image</span></div>
+        <div class="step"><span class="n">STEP 04</span><h3>Colorize ×3 · corroborate</h3><p>Three independent providers colorize the same image. Where they agree, confidence is high; where they diverge, we flag the region as a guess.</p><span class="modal">Image · fan-out</span></div>
+        <div class="step"><span class="n">STEP 05</span><h3>Upscale</h3><p>Super-resolution recovers apparent sharpness. New high-frequency detail is measured against the master and marked as fabricated.</p><span class="modal">Image</span></div>
+        <div class="step"><span class="n">STEP 06</span><h3>Restore audio</h3><p>For archival recordings, a denoise/restore pass cleans crackle and hiss — with its own authenticity record, proving multimodal reach.</p><span class="modal">Audio</span></div>
+      </div>
+      <div class="grid g3" style="margin-top:18px">
+        <div class="card" style="grid-column:span 3">
+          <div class="feature-list">
+            <div class="fl"><span class="mk">↻</span><div><h3>Verification loop (LLM-as-judge)</h3><p>After restoration, a vision model compares the result to the master and flags historically implausible inventions — an added person, altered sign text. Flagged regions are marked high-risk or the step retries with conservative settings. This is what turns a demo into a workflow.</p></div></div>
+            <div class="fl"><span class="mk">⛓</span><div><h3>Parent → child lineage</h3><p>Iterative refinement passes link back to their source run, so the entire evolution of a restoration is an auditable graph — not a black box.</p></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule"/>
+
+  <!-- ===================== AUTHENTICITY MAP ===================== -->
+  <section id="map">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">The authenticity map · our technical core</span>
+        <h2>Recorded at generation time — not reverse-engineered after.</h2>
+        <p>Because Trueprint orchestrates every step, it knows exactly what each model changed and where. That's why the map is real and reproducible, not a plausible-looking overlay. Here's how each operation is classified, honestly.</p>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Operation</th><th>What's fabricated</th><th>How we know &amp; mark it</th><th>Class</th></tr></thead>
+          <tbody>
+            <tr><td>Damage inpainting</td><td>Content filling holes, scratches, tears</td><td>The damage mask fed <em>into</em> the step <em>is</em> the fabricated region — recorded directly.</td><td><span class="op fab">FABRICATED</span></td></tr>
+            <tr><td>Colorization</td><td>All chroma — color is a guess by definition</td><td>A grayscale master has no color, so 100% of hue is inferred. Multi-provider disagreement grades confidence.</td><td><span class="op fab">FABRICATED</span></td></tr>
+            <tr><td>Super-resolution</td><td>High-frequency detail absent in the master</td><td>Frequency-domain diff vs. the upsampled master isolates invented structure.</td><td><span class="op fab">FABRICATED</span></td></tr>
+            <tr><td>Face restoration</td><td>Facial detail rebuilt from a prior</td><td>The face-detection mask for the step marks the high-fabrication region.</td><td><span class="op fab">FABRICATED</span></td></tr>
+            <tr><td>Denoise / de-scratch</td><td>Nothing — original signal preserved</td><td>Signal is cleaned, not invented; measured change stays below the fabrication threshold.</td><td><span class="op enh">ENHANCED</span></td></tr>
+            <tr><td>Untouched regions</td><td>Nothing</td><td>Pixels identical to the master within tolerance.</td><td><span class="op org">ORIGINAL</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid g2" style="margin-top:18px">
+        <div class="card">
+          <span class="tag" style="color:var(--accent)">The novel move</span>
+          <h3>Multi-provider confidence</h3>
+          <p>We run colorization across several independent models and measure per-pixel variance. Agreement means the inference is well-grounded; disagreement means the AI is genuinely guessing — surfaced as a confidence heatmap no other restoration tool produces.</p>
+        </div>
+        <div class="card">
+          <span class="tag" style="color:var(--accent)">The output</span>
+          <h3>A plain-language verdict</h3>
+          <p>Every result carries a one-line disclosure: <em>“~38% of this image is AI-inferred, including all color and one reconstructed face.”</em> Human-readable for a museum label; machine-readable for compliance.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule"/>
+
+  <!-- ===================== PROVENANCE ===================== -->
+  <section id="provenance">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Provenance &amp; storage · Backblaze B2</span>
+        <h2>The record outlives the file, and can't be quietly rewritten.</h2>
+        <p>Every restoration produces a hash-verified manifest, embedded into the media and archived durably on Backblaze B2 alongside an immutable original master. Trust that travels with the file.</p>
+      </div>
+      <div class="prov">
+        <div class="manifest" aria-label="Example provenance manifest">
+          <div class="mtop"><span class="d"></span><span class="d"></span><span class="d"></span><span>manifest.json · embedded + B2</span></div>
+<pre><span class="oo">{</span>
+  <span class="kk">"asset_id"</span>: <span class="vv">"tp_0x8f21"</span>,
+  <span class="kk">"master"</span>: <span class="oo">{</span> <span class="kk">"sha256"</span>: <span class="vv">"a1b7…9f3c"</span>, <span class="kk">"object_lock"</span>: <span class="cc">true</span> <span class="oo">}</span>,
+  <span class="kk">"pipeline"</span>: <span class="oo">[</span>
+    <span class="oo">{</span> <span class="kk">"step"</span>:<span class="vv">"inpaint"</span>, <span class="kk">"model"</span>:<span class="vv">"flux-kontext"</span>,
+      <span class="kk">"operation"</span>:<span class="cc">"FABRICATED"</span>, <span class="kk">"region"</span>:<span class="vv">"mask_02.png"</span> <span class="oo">}</span>,
+    <span class="oo">{</span> <span class="kk">"step"</span>:<span class="vv">"colorize"</span>, <span class="kk">"providers"</span>:<span class="vv">3</span>,
+      <span class="kk">"confidence"</span>:<span class="vv">0.71</span> <span class="oo">}</span>
+  <span class="oo">]</span>,
+  <span class="kk">"authenticity"</span>: <span class="oo">{</span> <span class="kk">"original"</span>:<span class="vv">0.55</span>,
+    <span class="kk">"enhanced"</span>:<span class="vv">0.07</span>, <span class="kk">"fabricated"</span>:<span class="vv">0.38</span> <span class="oo">}</span>,
+  <span class="kk">"disclosure"</span>: <span class="vv">"~38% AI-inferred; all color; 1 face."</span>
+<span class="oo">}</span></pre>
+        </div>
+        <div class="feature-list">
+          <div class="fl"><span class="mk">⬒</span><div><h3>Dual archive on B2 (OAIS model)</h3><p>Immutable masters + restored derivatives + manifests, in a hierarchical, queryable key layout — the system of record, not a dumb blob store.</p></div></div>
+          <div class="fl"><span class="mk">🔒</span><div><h3>Object Lock on masters</h3><p>Backblaze B2 Object Lock makes originals provably unalterable, giving the archive tamper-evident, retention-grade integrity.</p></div></div>
+          <div class="fl"><span class="mk">✓</span><div><h3>Off-platform verification</h3><p>The Verify page reads the manifest embedded in <em>any</em> downloaded Trueprint file and re-checks its hash against B2 — a green pass, or a red tamper alert.</p></div></div>
+          <div class="fl"><span class="mk">◎</span><div><h3>C2PA-aligned &amp; Article 50 ready</h3><p>Field names align with the C2PA content-provenance standard, and the disclosure doubles as EU AI Act Article 50 machine-readable AI labeling — enforced from Aug 2, 2026.</p></div></div>
+        </div>
+      </div>
+      <div style="margin-top:22px" class="act">
+        <a class="btn btn-ghost" href="#verify-file" id="verify-file">Open the Verify page</a>
+        <button class="info" aria-label="What is the Verify page?">i</button>
+        <span class="pop" role="tooltip"><span class="k">Verify page</span>A public trust endpoint: drop in any Trueprint file to extract its provenance, confirm the hash against the Backblaze B2 record, and detect any tampering — even for files that left the platform.</span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule"/>
+
+  <!-- ===================== AUDIENCES ===================== -->
+  <section id="audiences">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Who it's for</span>
+        <h2>Anyone who has to trust a restored image — and be trusted with it.</h2>
+      </div>
+      <div class="grid g4">
+        <div class="card"><span class="tag" style="color:var(--accent)">Institutions</span><h3>Archives &amp; museums</h3><p>Publish restored collections with an auditable line between conserved fact and artistic reconstruction.</p></div>
+        <div class="card"><span class="tag" style="color:var(--accent)">Everyday</span><h3>Genealogists &amp; families</h3><p>Bring heirloom photos back to life while keeping an honest note of what was invented — memory, not fabrication.</p></div>
+        <div class="card"><span class="tag" style="color:var(--accent)">Media</span><h3>Journalists &amp; documentarians</h3><p>Use restored archival footage on air with a provenance credit that survives fact-checking.</p></div>
+        <div class="card"><span class="tag" style="color:var(--accent)">Legal</span><h3>Courts &amp; estates</h3><p>Enter restored evidence with a chain of custody: what's original, what's model-generated, hash-sealed.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule"/>
+
+  <!-- ===================== BUILT ON ===================== -->
+  <section id="stack" class="stack">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Built on</span>
+        <h2>The stack that makes provenance possible.</h2>
+        <p>Trueprint isn't a wrapper around one model — it's an orchestration and archival system. These pieces are load-bearing, not logos.</p>
+      </div>
+      <div class="grid g3">
+        <div class="card"><span class="tag">Storage · system of record</span><h3>Backblaze B2</h3><p>S3-compatible object storage holding the whole archive.</p><ul><li>Immutable masters via Object Lock</li><li>Derivatives, manifests &amp; step outputs</li><li>Queryable lineage catalog</li><li>Serve, verify &amp; replay from storage</li></ul></div>
+        <div class="card"><span class="tag">Orchestration · provenance</span><h3>Genblaze SDK</h3><p>Backblaze's open-source pipeline engine.</p><ul><li>Multi-provider, multi-modal chaining</li><li>Fallback models &amp; retries</li><li>Hash-verified embedded manifests</li><li>Parent→child run lineage</li></ul></div>
+        <div class="card"><span class="tag">Models · inference</span><h3>GMI Cloud &amp; providers</h3><p>The specialist models each step calls.</p><ul><li>Vision LLM — damage &amp; scene analysis</li><li>Image-to-image — repair, faces, color, upscale</li><li>Audio — denoise &amp; restore</li><li>Swappable per step, no re-architecting</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule"/>
+
+  <!-- ===================== LEARN / GLOSSARY ===================== -->
+  <section id="learn">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Learn · the concepts in plain language</span>
+        <h2>Everything you need to follow the whole idea.</h2>
+        <p>New to provenance and content authenticity? These are the terms behind Trueprint, defined simply. Expand any one.</p>
+      </div>
+      <div>
+        <details><summary><span class="term"><span class="plus">+</span> Provenance</span></summary><div class="def">The documented history of where something came from and everything that happened to it. For a restored image, provenance answers: what was the original, which models touched it, and what did each one change?</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Authenticity map</span></summary><div class="def">A region-level overlay classifying every part of a restored image as <span class="mono">original</span>, <span class="mono">enhanced</span>, or <span class="mono">fabricated</span> — so you can see at a glance what's genuine and what the AI invented.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Fabricated vs. original</span></summary><div class="def"><b>Original</b> = real signal from the source. <b>Fabricated</b> = content invented by a model with no basis in the source (colorized hue, inpainted damage, rebuilt faces). Trueprint never blurs the two.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Manifest</span></summary><div class="def">A structured record — a small JSON document — listing every pipeline step, the models used, the regions they changed, and hashes of the input and output. Trueprint embeds it inside the media file and stores a copy on B2.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Hash / fingerprint</span></summary><div class="def">A <span class="mono">SHA-256</span> hash is a short string uniquely derived from a file's exact bytes. Change one pixel and the hash changes completely — which is how tampering is detected during verification.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Multi-provider corroboration</span></summary><div class="def">Running the same task through several independent models and comparing results. Agreement signals a well-grounded inference; disagreement reveals genuine uncertainty — Trueprint turns this into a confidence score.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> C2PA</span></summary><div class="def">The Coalition for Content Provenance and Authenticity standard — a cryptographically signed record of a file's origin and edit history, backed by Adobe, the BBC, the New York Times and others. Trueprint's manifest aligns with it for interoperability.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> OAIS &amp; Object Lock</span></summary><div class="def"><b>OAIS</b> is the reference model for long-term digital archiving (masters, derivatives, metadata kept distinct). <b>Object Lock</b> is a Backblaze B2 feature that makes a stored object immutable for a set period — so an original master can't be silently altered.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> EU AI Act · Article 50</span></summary><div class="def">The EU AI Act's transparency rule, enforced from <span class="mono">Aug 2, 2026</span>, requiring AI-generated or manipulated media to carry machine-readable disclosure. Trueprint's provenance record satisfies this by design.</div></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CTA BAND ===================== -->
+  <section id="try">
+    <div class="wrap">
+      <div class="band">
+        <span class="eyebrow">Restoration you can cite</span>
+        <h2>See exactly what the AI invented.</h2>
+        <p>Upload a damaged photo, watch it come back to life across multiple models, and get a verifiable record of every choice — stored durably on Backblaze B2.</p>
+        <div class="hero-cta">
+          <span class="act">
+            <a class="btn btn-primary" href="#top">Try the demo <span class="arrow">→</span></a>
+            <button class="info" aria-label="What does Try the demo do?">i</button>
+            <span class="pop" role="tooltip"><span class="k">Try the demo</span>Launches the live restoration app with sample archival photos preloaded — one click to run the full pipeline end to end.</span>
+          </span>
+          <span class="act">
+            <a class="btn btn-ghost" href="#provenance">Verify a file</a>
+            <button class="info" aria-label="What does Verify a file do?">i</button>
+            <span class="pop" role="tooltip"><span class="k">Verify a file</span>Check any Trueprint image's provenance and integrity against the Backblaze B2 record — proof that survives leaving the platform.</span>
+          </span>
+          <span class="act">
+            <a class="btn btn-ghost" href="#stack">View the repo</a>
+            <button class="info" aria-label="What does View the repo do?">i</button>
+            <span class="pop" role="tooltip"><span class="k">Source &amp; setup</span>The public GitHub repository with the pipeline code, B2 + Genblaze integration, and setup instructions for judges.</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <a class="brand" href="#top" style="margin-bottom:12px" aria-label="Trueprint home">
+        <svg class="glyph" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="21" rx="3" stroke="var(--accent)" stroke-width="1.5"/><path d="M6 12.5 10 16.5 18 7.5" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Trueprint
+      </a>
+      <p class="fnote">Provenance-preserving restoration for the world's archives. Built for the Backblaze Generative Media Hackathon on Backblaze B2 + Genblaze. Sources &amp; citations are documented in <span class="mono">SOURCES.md</span>; regulatory and archival claims are referenced, and demo figures are illustrative.</p>
+    </div>
+    <div class="fcol">
+      <span class="h">Product</span>
+      <a href="#how">How it works</a>
+      <a href="#map">Authenticity map</a>
+      <a href="#provenance">Provenance &amp; B2</a>
+      <a href="#learn">Learn</a>
+    </div>
+    <div class="fcol">
+      <span class="h">Built with</span>
+      <a href="#stack">Backblaze B2</a>
+      <a href="#stack">Genblaze SDK</a>
+      <a href="#stack">GMI Cloud</a>
+      <a href="#provenance">C2PA-aligned</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ---- hero specimen mode control ----
+  (function(){
+    var stage = document.getElementById('stage');
+    var cap = document.getElementById('cap');
+    var caps = {
+      damaged:  'DAMAGED · original scan · sha256:9f3c…a1b7 · not yet processed',
+      restored: 'RESTORED · sha256:2e8a…c4d1 · 6 steps · 4 providers',
+      auth:     'AUTHENTICITY · 55% original · 7% enhanced · 38% fabricated'
+    };
+    document.querySelectorAll('.seg button').forEach(function(b){
+      b.addEventListener('click', function(){
+        var mode = b.getAttribute('data-set');
+        stage.setAttribute('data-mode', mode);
+        document.querySelectorAll('.seg button').forEach(function(x){ x.setAttribute('aria-pressed', String(x===b)); });
+        if(cap) cap.textContent = caps[mode];
+      });
+    });
+  })();
+
+  // ---- scroll reveal ----
+  (function(){
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var els = document.querySelectorAll('section .wrap > *, .pipe .step, .grid .card');
+    els.forEach(function(el){ el.setAttribute('data-reveal',''); });
+    if(reduce || !('IntersectionObserver' in window)){ els.forEach(function(el){ el.classList.add('in'); }); return; }
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, {rootMargin:'0px 0px -8% 0px', threshold:.08});
+    els.forEach(function(el){ io.observe(el); });
+  })();
+</script>

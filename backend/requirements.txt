@@ -1,0 +1,14 @@
+# Trueprint backend
+genblaze
+genblaze-s3
+genblaze-gmicloud
+fastapi
+uvicorn[standard]
+python-dotenv
+pillow
+numpy
+opencv-python-headless
+boto3
+reportlab
+httpx
+python-multipart
