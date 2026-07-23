@@ -44,6 +44,11 @@ def to_png(arr: np.ndarray) -> bytes:
     return buf.getvalue()
 
 
+def mask_to_png(mask: np.ndarray) -> bytes:
+    """0/255 single-channel mask -> 3-channel PNG."""
+    return to_png(np.stack([mask, mask, mask], axis=-1))
+
+
 def _resize_to(src: np.ndarray, h: int, w: int) -> np.ndarray:
     if src.shape[0] == h and src.shape[1] == w:
         return src
@@ -89,17 +94,51 @@ def color_confidence(original_rgb: np.ndarray, ai_samples: list[np.ndarray]) -> 
 
 
 # ------------------------------------------------------------- damage masks
-def detect_damage(original_rgb: np.ndarray) -> np.ndarray:
-    """Heuristic scratch/dust/tear mask via morphological black/top-hat. Returns 0/255 mask."""
+def detect_damage(original_rgb: np.ndarray, *, thresh: int = 42,
+                  max_area: int = 450, max_coverage: float = 0.02) -> np.ndarray:
+    """Conservative scratch/dust/tear mask (0/255).
+
+    Morphological black/top-hat isolates thin bright/dark defects; we then keep only
+    *small* connected components (dust specks, thin scratches) and drop large blobs
+    (shadows, facial features), so we never mark real detail as damage. If the result
+    still covers more than ``max_coverage`` of the frame, we treat it as texture noise
+    and return an empty mask rather than over-report.
+    """
     gray = cv2.cvtColor(original_rgb, cv2.COLOR_RGB2GRAY)
-    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
-    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, k)  # dark thin defects
-    tophat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, k)      # bright thin defects
-    defect = cv2.max(blackhat, tophat)
-    _, mask = cv2.threshold(defect, 38, 255, cv2.THRESH_BINARY)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE,
-                            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
-    return mask
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    defect = cv2.max(cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, k),
+                     cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, k))
+    _, raw = cv2.threshold(defect, thresh, 255, cv2.THRESH_BINARY)
+
+    # Only trust defects in LOW-TEXTURE regions. Real detail (hair, beard, wrinkles,
+    # fabric) has high local variance and must never be called "damage"; dust/specks
+    # on smooth backgrounds and skin do not.
+    g = gray.astype(np.float32)
+    mean = cv2.blur(g, (17, 17))
+    local_std = np.sqrt(np.maximum(cv2.blur(g * g, (17, 17)) - mean * mean, 0))
+    raw[local_std > 9.0] = 0                       # exclude textured detail
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(raw, 8)
+    mask = np.zeros_like(raw)
+    for i in range(1, n):
+        area = stats[i, cv2.CC_STAT_AREA]
+        if 2 <= area <= max_area:                 # small specks / thin scratches only
+            mask[labels == i] = 255
+    if mask.mean() / 255.0 > max_coverage:        # still too much -> texture noise, bail
+        return np.zeros_like(raw)
+    return cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+
+
+def repair_damage(original_rgb: np.ndarray,
+                  mask: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Inpaint detected damage. Returns (repaired_rgb, mask). No API cost (OpenCV)."""
+    if mask is None:
+        mask = detect_damage(original_rgb)
+    if mask.any():
+        repaired = cv2.inpaint(original_rgb, mask, 3, cv2.INPAINT_TELEA)
+    else:
+        repaired = original_rgb
+    return repaired, mask
 
 
 # -------------------------------------------------------- authenticity map

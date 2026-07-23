@@ -118,6 +118,23 @@ class RestorePipeline:
                                 output_sha256=master.sha256, detail={"object_lock": True}))
         progress({"step": "ingest", "status": "ok", "sha256": master.sha256})
 
+        # 1b) conservative damage repair (OpenCV inpaint; smooth-region gated so real
+        #     detail is never called damage). Repaired regions = fabricated structure.
+        progress({"step": "repair", "status": "running"})
+        repaired, damage_mask = A.repair_damage(original)
+        damage_px = int((damage_mask > 0).sum())
+        fab_regions = {"damage_repair": damage_mask} if damage_px > 50 else None
+        if fab_regions:
+            self.store.put_derivative(asset_id, run_id, "damage_mask.png",
+                                      A.mask_to_png(damage_mask), "image/png")
+            steps.append(StepRecord("repair", "trueprint", "opencv-inpaint-telea", "FABRICATED", "ok",
+                                    detail={"damage_px": damage_px,
+                                            "coverage_pct": round(100 * damage_mask.mean() / 255, 3)}))
+        else:
+            steps.append(StepRecord("repair", "trueprint", "opencv-inpaint-telea", "ENHANCED", "ok",
+                                    detail={"damage_px": damage_px, "note": "no significant damage detected"}))
+        progress({"step": "repair", "status": "ok"})
+
         # 2) analyze
         progress({"step": "analyze", "status": "running"})
         try:
@@ -159,16 +176,18 @@ class RestorePipeline:
         progress({"step": "authenticity", "status": "running"})
         if declined:
             # On-thesis graceful path: the refusal itself is provenance. We keep the
-            # original unaltered and record that AI colorization was declined.
-            final_rgb = original
+            # (damage-repaired) original and record that AI colorization was declined.
+            final_rgb = repaired
             confidence, mean_conf = A.color_confidence(original, [])
-            cls, stats = A.classify(original, final_rgb, confidence=confidence)
+            cls, stats = A.classify(original, final_rgb, confidence=confidence,
+                                    fabricated_regions=fab_regions)
             stats.notes.insert(0, "AI colorization was declined for this image (provider content policy); "
                                   "the original is shown unaltered. The refusal is recorded in provenance.")
         else:
-            final_rgb = A.colorize_recombine(original, ai_samples[0])   # luminance-locked
+            final_rgb = A.colorize_recombine(repaired, ai_samples[0])   # luminance-locked to repaired
             confidence, mean_conf = A.color_confidence(original, ai_samples)
-            cls, stats = A.classify(original, final_rgb, confidence=confidence)
+            cls, stats = A.classify(original, final_rgb, confidence=confidence,
+                                    fabricated_regions=fab_regions)
         restored_png = A.to_png(final_rgb)
         overlay_png = A.render_overlay(original, cls)
         confidence_png = A.render_confidence(original, confidence)

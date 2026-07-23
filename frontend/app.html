@@ -187,9 +187,10 @@
 
 <script>
 const $ = s => document.querySelector(s);
-const STEP_LABELS = {ingest:"Ingest master → B2 (Object Lock)", analyze:"Analyze damage (Gemini)",
-  colorize_0:"Colorize · sample 1 (Genblaze)", colorize_1:"Colorize · sample 2 (Genblaze)",
-  authenticity:"Authenticity map + confidence", archive:"Archive + provenance manifest → B2"};
+const STEP_LABELS = {ingest:"Ingest master → B2 (Object Lock)", repair:"Repair damage (OpenCV inpaint)",
+  analyze:"Analyze damage (Gemini)", colorize_0:"Colorize · sample 1 (Genblaze)",
+  colorize_1:"Colorize · sample 2 (Genblaze)", authenticity:"Authenticity map + confidence",
+  archive:"Archive + provenance manifest → B2"};
 
 // ---- tabs ----
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
