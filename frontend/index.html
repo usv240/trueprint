@@ -519,7 +519,7 @@
           <thead><tr><th>Operation</th><th>What's fabricated</th><th>How we know &amp; mark it</th><th>Class</th></tr></thead>
           <tbody>
             <tr><td>Damage inpainting</td><td>Content filling holes, scratches, tears</td><td>The damage mask fed <em>into</em> the step <em>is</em> the fabricated region — recorded directly.</td><td><span class="op fab">FABRICATED</span></td></tr>
-            <tr><td>Colorization</td><td>All chroma — color is a guess by definition</td><td>A grayscale master has no color, so 100% of hue is inferred. Multi-provider disagreement grades confidence.</td><td><span class="op fab">FABRICATED</span></td></tr>
+            <tr><td>Colorization</td><td>All chroma — color is a guess by definition</td><td>A grayscale master has no color, so 100% of hue is inferred. Disagreement across independent samples grades confidence.</td><td><span class="op fab">FABRICATED</span></td></tr>
             <tr><td>Super-resolution</td><td>High-frequency detail absent in the master</td><td>Frequency-domain diff vs. the upsampled master isolates invented structure.</td><td><span class="op fab">FABRICATED</span></td></tr>
             <tr><td>Face restoration</td><td>Facial detail rebuilt from a prior</td><td>The face-detection mask for the step marks the high-fabrication region.</td><td><span class="op fab">FABRICATED</span></td></tr>
             <tr><td>Denoise / de-scratch</td><td>Nothing — original signal preserved</td><td>Signal is cleaned, not invented; measured change stays below the fabrication threshold.</td><td><span class="op enh">ENHANCED</span></td></tr>
@@ -530,8 +530,8 @@
       <div class="grid g2" style="margin-top:18px">
         <div class="card">
           <span class="tag" style="color:var(--accent)">The novel move</span>
-          <h3>Multi-provider confidence</h3>
-          <p>We run colorization across several independent models and measure per-pixel variance. Agreement means the inference is well-grounded; disagreement means the AI is genuinely guessing — surfaced as a confidence heatmap no other restoration tool produces.</p>
+          <h3>Multi-sample confidence</h3>
+          <p>We run colorization several times as independent samples (the pipeline is multi-provider-ready) and measure per-pixel variance. Agreement means the inference is well-grounded; disagreement means the AI is genuinely guessing — surfaced as a confidence heatmap no other restoration tool produces.</p>
         </div>
         <div class="card">
           <span class="tag" style="color:var(--accent)">The output</span>
@@ -636,7 +636,7 @@
         <details><summary><span class="term"><span class="plus">+</span> Fabricated vs. original</span></summary><div class="def"><b>Original</b> = real signal from the source. <b>Fabricated</b> = content invented by a model with no basis in the source (colorized hue, inpainted damage, rebuilt faces). Trueprint never blurs the two.</div></details>
         <details><summary><span class="term"><span class="plus">+</span> Manifest</span></summary><div class="def">A structured record — a small JSON document — listing every pipeline step, the models used, the regions they changed, and hashes of the input and output. Trueprint embeds it inside the media file and stores a copy on B2.</div></details>
         <details><summary><span class="term"><span class="plus">+</span> Hash / fingerprint</span></summary><div class="def">A <span class="mono">SHA-256</span> hash is a short string uniquely derived from a file's exact bytes. Change one pixel and the hash changes completely — which is how tampering is detected during verification.</div></details>
-        <details><summary><span class="term"><span class="plus">+</span> Multi-provider corroboration</span></summary><div class="def">Running the same task through several independent models and comparing results. Agreement signals a well-grounded inference; disagreement reveals genuine uncertainty — Trueprint turns this into a confidence score.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Multi-sample corroboration</span></summary><div class="def">Running the same task several times as independent samples — and, when available, across different models — then comparing results. Agreement signals a well-grounded inference; disagreement reveals genuine uncertainty — Trueprint turns this into a confidence score.</div></details>
         <details><summary><span class="term"><span class="plus">+</span> C2PA</span></summary><div class="def">The Coalition for Content Provenance and Authenticity standard — a cryptographically signed record of a file's origin and edit history, backed by Adobe, the BBC, the New York Times and others. Trueprint's manifest aligns with it for interoperability.</div></details>
         <details><summary><span class="term"><span class="plus">+</span> OAIS &amp; Object Lock</span></summary><div class="def"><b>OAIS</b> is the reference model for long-term digital archiving (masters, derivatives, metadata kept distinct). <b>Object Lock</b> is a Backblaze B2 feature that makes a stored object immutable for a set period — so an original master can't be silently altered.</div></details>
         <details><summary><span class="term"><span class="plus">+</span> EU AI Act · Article 50</span></summary><div class="def">The EU AI Act's transparency rule, enforced from <span class="mono">Aug 2, 2026</span>, requiring AI-generated or manipulated media to carry machine-readable disclosure. Trueprint's provenance record satisfies this by design.</div></details>
