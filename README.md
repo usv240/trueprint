@@ -28,6 +28,7 @@ Built for the **Backblaze Generative Media Hackathon** on **Backblaze B2 + Genbl
 - **Orchestration** of each restoration through the Genblaze `Pipeline` (steps, inputs, provider abstraction).
 - A **custom provider** (`TrueprintImageProvider`, subclassing `GMICloudImageProvider`) emits the request-queue payload the image model expects — keeping all of Genblaze's Pipeline / manifest / lineage machinery.
 - **Multi-sample corroboration** — independent colorizations are compared to quantify per-pixel confidence.
+- **LLM-as-judge verification** — a `CallableEvaluator` producing a Genblaze `EvaluationResult` compares the restoration to the master and flags historically-implausible fabrication (this caught, and drove the fix for, a real ghosting artifact during development).
 - **Provenance manifests** from each run are folded into Trueprint's manifest, hash-verified, and archived on B2.
 
 ## Providers & models used

@@ -42,7 +42,12 @@ FastAPI backend (upload, **live SSE progress**, result, verify) serving a vanill
 - `gpt-image-2-edit` **declines photos with minors** (provider policy). We turned that into a feature: refusals are recorded as provenance and the pipeline degrades gracefully.
 
 ## Accomplishments we're proud of
-The **confidence heatmap** — real, computed from independent generations, lighting up exactly where the AI is guessing — is something no consumer restoration tool shows. And "structure 100% preserved, color 100% inferred" is not marketing; it's computed and provable.
+The **confidence heatmap** — real, computed from independent generations, lighting up exactly where the AI is guessing — is something no consumer restoration tool shows. "Structure 100% preserved, color 100% inferred" is not marketing; it's computed and provable. And our **LLM-as-judge faithfulness check** caught a real ghosting artifact in our own pipeline during development and drove the fix (aspect-matched generation) — the QA loop earning its keep. The whole thesis is timely: in 2026 the **Ansel Adams Trust publicly condemned an undisclosed AI-colorized photo** — exactly the harm provenance-first restoration prevents.
+
+## Faithfulness &amp; honesty features
+- **Documented vs. guessed color:** the vision model separates colors that are *historically knowable* (flags, insignia) from those that are *unknowable guesses* — surfaced in the disclosure.
+- **LLM-as-judge:** every restoration is scored for implausible fabrication (added/removed/altered content) as a Genblaze `EvaluationResult`.
+- **Refusals recorded:** content-policy declines are written into provenance, not hidden.
 
 ## What's next
 A CA-issued signing cert on the C2PA trust list (dev build self-signs), generative damage-repair via masked inpainting models, audio restoration, IIIF/PREMIS metadata export, and a batch mode for institutional archives.
