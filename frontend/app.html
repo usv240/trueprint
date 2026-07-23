@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trueprint — Restore & Verify</title>
+<style>
+  :root{
+    --bg:#0D1113; --surface:#141A1C; --surface-2:#1A2124; --line:#28312F;
+    --text:#E9ECE9; --muted:#9AA6A3; --faint:#63706D;
+    --verify:#33C2B4; --enhanced:#E4B14E; --fabricated:#F06A42; --accent:#33C2B4; --accent-ink:#04100f;
+    --font-display: ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --font-mono: ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  h1,h2,h3{margin:0;font-weight:600}
+  .mono{font-family:var(--font-mono)}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);z-index:20}
+  .nav{display:flex;align-items:center;gap:18px;height:60px}
+  .brand{font-family:var(--font-display);font-size:19px;font-weight:600;display:flex;align-items:center;gap:9px}
+  .brand svg{width:20px;height:20px}
+  .nav .sp{flex:1}
+  .tabs{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:100px;padding:3px}
+  .tabs button{font-family:var(--font-mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;border:0;background:transparent;color:var(--muted);padding:7px 15px;border-radius:100px;cursor:pointer}
+  .tabs button[aria-selected="true"]{background:var(--surface-2);color:var(--text)}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:600;padding:11px 18px;border-radius:9px;border:1px solid transparent;cursor:pointer;transition:.15s}
+  .btn-primary{background:var(--accent);color:var(--accent-ink)}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+  .btn-ghost{background:transparent;color:var(--text);border-color:var(--line)}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+  .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  section.view{padding:30px 0 80px;display:none}
+  section.view.active{display:block}
+
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:26px;align-items:start}
+  @media (max-width:860px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+  .card h3{font-size:15px;margin-bottom:12px}
+
+  .samples{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .samples button{padding:0;border:2px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;background:none;aspect-ratio:3/4}
+  .samples button[aria-pressed="true"]{border-color:var(--accent)}
+  .samples img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(1)}
+  .drop{margin-top:12px;border:1.5px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--muted);font-size:13px;cursor:pointer}
+  .drop:hover{border-color:var(--accent);color:var(--text)}
+
+  /* progress */
+  .steps{display:flex;flex-direction:column;gap:9px}
+  .stp{display:flex;align-items:center;gap:11px;font-size:14px;color:var(--muted)}
+  .stp .dot{width:11px;height:11px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto}
+  .stp[data-s="running"] .dot{border-color:var(--accent);animation:pulse 1s infinite}
+  .stp[data-s="ok"] .dot{background:var(--verify);border-color:var(--verify)}
+  .stp[data-s="ok"]{color:var(--text)}
+  .stp[data-s="failed"] .dot,.stp[data-s="skipped"] .dot{background:var(--fabricated);border-color:var(--fabricated)}
+  .stp .m{font-family:var(--font-mono);font-size:11px;color:var(--faint);margin-left:auto}
+  @keyframes pulse{50%{opacity:.4}}
+
+  /* viewer */
+  .viewer{position:relative;background:#0a0f10;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-height:320px;display:grid;place-items:center}
+  .viewer img{width:100%;display:block}
+  .modes{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:100px;padding:3px;margin-bottom:12px}
+  .modes button{font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;border:0;background:transparent;color:var(--muted);padding:7px 12px;border-radius:100px;cursor:pointer}
+  .modes button[aria-pressed="true"]{background:var(--surface-2);color:var(--text)}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap}
+  .legend .d{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:baseline}
+
+  .stat-row{display:flex;gap:8px;margin:6px 0 2px}
+  .stat{flex:1;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px;text-align:center}
+  .stat .v{font-family:var(--font-mono);font-size:20px;font-weight:700}
+  .stat .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .stat.org .v{color:var(--verify)} .stat.enh .v{color:var(--enhanced)} .stat.fab .v{color:var(--fabricated)}
+  .kv{font-family:var(--font-mono);font-size:12px;color:var(--muted);word-break:break-all;margin:4px 0}
+  .kv b{color:var(--text);font-weight:600}
+  .disclosure{background:var(--surface-2);border-left:3px solid var(--accent);border-radius:6px;padding:12px 14px;font-size:14px;margin-top:10px}
+  .muted{color:var(--muted)} .small{font-size:13px}
+  .hidden{display:none!important}
+  .err{color:var(--fabricated);font-size:13px}
+  .verdict{display:flex;align-items:center;gap:12px;padding:16px;border-radius:12px;border:1px solid var(--line);font-size:16px;font-weight:600}
+  .verdict.ok{border-color:var(--verify);background:color-mix(in srgb,var(--verify) 12%,transparent)}
+  .verdict.bad{border-color:var(--fabricated);background:color-mix(in srgb,var(--fabricated) 12%,transparent)}
+  .spin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header><div class="wrap nav">
+  <a class="brand" href="/"><svg viewBox="0 0 24 24" fill="none"><rect x="1.5" y="1.5" width="21" height="21" rx="3" stroke="var(--accent)" stroke-width="1.5"/><path d="M6 12.5 10 16.5 18 7.5" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Trueprint</a>
+  <div class="sp"></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="restore">Restore</button>
+    <button role="tab" aria-selected="false" data-tab="verify">Verify</button>
+  </div>
+  <a class="btn btn-ghost small" href="/">Home</a>
+</div></header>
+
+<!-- ===================== RESTORE ===================== -->
+<section class="view active" id="view-restore">
+  <div class="wrap">
+    <div style="margin-bottom:20px">
+      <span class="eyebrow">Restore &amp; reveal</span>
+      <h2 style="font-family:var(--font-display);font-size:28px;margin-top:6px">Restore a photo — and see what the AI invented.</h2>
+    </div>
+    <div class="grid">
+      <!-- controls -->
+      <div class="card">
+        <h3>1 · Choose a photo</h3>
+        <div class="samples" id="samples"></div>
+        <label class="drop" for="file">or drop / choose your own image
+          <input id="file" type="file" accept="image/*" class="hidden"></label>
+        <p class="small muted" id="chosen" style="margin-top:8px"></p>
+        <button class="btn btn-primary" id="run" style="width:100%;justify-content:center;margin-top:14px" disabled>Restore</button>
+        <p class="small muted" style="margin-top:10px">Adult-subject historical photos work best — some image models decline photos with children.</p>
+      </div>
+
+      <!-- output -->
+      <div>
+        <!-- progress -->
+        <div class="card" id="progress" style="margin-bottom:18px">
+          <h3>2 · Pipeline</h3>
+          <div class="steps" id="steps"></div>
+          <p class="err" id="run-err"></p>
+        </div>
+
+        <!-- result -->
+        <div id="result" class="hidden">
+          <div class="modes" id="modes">
+            <button data-mode="restored" aria-pressed="true">Restored</button>
+            <button data-mode="master" aria-pressed="false">Original</button>
+            <button data-mode="authenticity_map" aria-pressed="false">Authenticity</button>
+            <button data-mode="confidence" aria-pressed="false">Confidence</button>
+          </div>
+          <div class="viewer"><img id="viewer-img" alt="result"></div>
+          <div class="legend" id="legend">
+            <span><span class="d" style="background:var(--verify)"></span>Original / high confidence</span>
+            <span><span class="d" style="background:var(--enhanced)"></span>Enhanced</span>
+            <span><span class="d" style="background:var(--fabricated)"></span>Fabricated / AI guessing</span>
+          </div>
+
+          <div class="card" style="margin-top:16px">
+            <h3>Provenance &amp; authenticity</h3>
+            <div class="stat-row">
+              <div class="stat org"><div class="v" id="s-org">–</div><div class="k">Original</div></div>
+              <div class="stat enh"><div class="v" id="s-enh">–</div><div class="k">Enhanced</div></div>
+              <div class="stat fab"><div class="v" id="s-fab">–</div><div class="k">Fabricated</div></div>
+              <div class="stat"><div class="v" id="s-conf">–</div><div class="k">Confidence</div></div>
+            </div>
+            <div class="disclosure" id="disclosure"></div>
+            <div style="margin-top:12px">
+              <div class="kv"><b>asset</b> <span id="m-asset"></span></div>
+              <div class="kv"><b>master sha256</b> <span id="m-master"></span></div>
+              <div class="kv"><b>derivative sha256</b> <span id="m-deriv"></span></div>
+              <div class="kv"><b>manifest sha256</b> <span id="m-manifest"></span></div>
+              <div class="kv"><b>models</b> <span id="m-models"></span></div>
+            </div>
+            <details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">Vision analysis</summary>
+              <pre class="mono small" id="m-analysis" style="white-space:pre-wrap;color:var(--muted);margin-top:8px"></pre></details>
+            <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+              <a class="btn btn-ghost small" id="dl-restored" download>Download restored</a>
+              <a class="btn btn-ghost small" id="dl-manifest" target="_blank">View manifest</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== VERIFY ===================== -->
+<section class="view" id="view-verify">
+  <div class="wrap" style="max-width:720px">
+    <span class="eyebrow">Trust endpoint</span>
+    <h2 style="font-family:var(--font-display);font-size:28px;margin:6px 0 6px">Verify a Trueprint file.</h2>
+    <p class="muted" style="margin-bottom:18px">Drop any image. We hash it and check it against the Backblaze B2 record — proving whether it's an unaltered Trueprint output.</p>
+    <div class="card">
+      <label class="drop" for="vfile" style="margin:0">Drop / choose an image to verify
+        <input id="vfile" type="file" accept="image/*" class="hidden"></label>
+      <div id="v-out" style="margin-top:16px"></div>
+    </div>
+  </div>
+</section>
+
+<script>
+const $ = s => document.querySelector(s);
+const STEP_LABELS = {ingest:"Ingest master → B2 (Object Lock)", analyze:"Analyze damage (Gemini)",
+  colorize_0:"Colorize · sample 1 (Genblaze)", colorize_1:"Colorize · sample 2 (Genblaze)",
+  authenticity:"Authenticity map + confidence", archive:"Archive + provenance manifest → B2"};
+
+// ---- tabs ----
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected', String(x===b)));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  $('#view-'+b.dataset.tab).classList.add('active');
+});
+
+// ---- samples ----
+let chosenSample=null, chosenFile=null;
+fetch('/api/samples').then(r=>r.json()).then(list=>{
+  const el=$('#samples');
+  list.forEach(s=>{
+    const b=document.createElement('button'); b.setAttribute('aria-pressed','false'); b.title=s.label;
+    b.innerHTML=`<img src="${s.url}" alt="${s.label}">`;
+    b.onclick=()=>{chosenSample=s.name;chosenFile=null;
+      document.querySelectorAll('#samples button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+      $('#chosen').textContent='Selected: '+s.label; $('#run').disabled=false;};
+    el.appendChild(b);
+  });
+}).catch(()=>{$('#samples').innerHTML='<p class="small err">Backend not reachable.</p>';});
+
+$('#file').onchange=e=>{const f=e.target.files[0]; if(!f)return; chosenFile=f; chosenSample=null;
+  document.querySelectorAll('#samples button').forEach(x=>x.setAttribute('aria-pressed','false'));
+  $('#chosen').textContent='Uploaded: '+f.name; $('#run').disabled=false;};
+
+// ---- run pipeline ----
+function stepRow(key){let r=document.querySelector(`.stp[data-key="${key}"]`);
+  if(!r){r=document.createElement('div');r.className='stp';r.dataset.key=key;r.dataset.s='';
+    r.innerHTML=`<span class="dot"></span><span class="lbl">${STEP_LABELS[key]||key}</span><span class="m"></span>`;
+    $('#steps').appendChild(r);} return r;}
+
+$('#run').onclick=async()=>{
+  $('#run').disabled=true; $('#result').classList.add('hidden'); $('#steps').innerHTML=''; $('#run-err').textContent='';
+  Object.keys(STEP_LABELS).forEach(k=>stepRow(k));
+  const fd=new FormData();
+  if(chosenSample) fd.append('sample',chosenSample); else if(chosenFile) fd.append('file',chosenFile);
+  let job;
+  try{ job=await (await fetch('/api/restore',{method:'POST',body:fd})).json(); }
+  catch(e){ $('#run-err').textContent='Failed to start.'; $('#run').disabled=false; return; }
+  if(!job.job_id){ $('#run-err').textContent=job.detail||'Failed to start.'; $('#run').disabled=false; return; }
+  const es=new EventSource('/api/restore/stream/'+job.job_id);
+  es.onmessage=ev=>{ const d=JSON.parse(ev.data);
+    if(d.type==='progress' && d.step){ const r=stepRow(d.step); r.dataset.s=d.status||'running';
+      if(d.model) r.querySelector('.m').textContent=d.model; }
+    if(d.type==='error'){ $('#run-err').textContent=d.message; es.close(); $('#run').disabled=false; }
+  };
+  es.addEventListener('result',ev=>{ es.close(); $('#run').disabled=false; renderResult(JSON.parse(ev.data)); });
+};
+
+// ---- render result ----
+let RES=null;
+function renderResult(res){ RES=res; $('#result').classList.remove('hidden');
+  setMode('restored');
+  const s=res.stats||{};
+  $('#s-org').textContent=(s.pct_original??'–')+'%'; $('#s-enh').textContent=(s.pct_enhanced??'–')+'%';
+  $('#s-fab').textContent=(s.pct_fabricated??'–')+'%'; $('#s-conf').textContent=Math.round((s.mean_confidence??0)*100)+'%';
+  $('#disclosure').textContent=res.disclosure||'';
+  const m=res.manifest||{};
+  $('#m-asset').textContent=res.asset_id+' / '+res.run_id;
+  $('#m-master').textContent=(m.master&&m.master.sha256)||'';
+  $('#m-deriv').textContent=(m.derivative&&m.derivative.sha256)||'';
+  $('#m-manifest').textContent=res.manifest_sha256||m.manifest_sha256||'';
+  const pv=m.providers||{}; $('#m-models').textContent=[pv.vision,pv.colorize].filter(Boolean).join(' · ');
+  $('#m-analysis').textContent=JSON.stringify(m.analysis||res.analysis||{},null,2);
+  $('#dl-restored').href=res.urls.restored; $('#dl-manifest').href=res.urls.manifest;
+}
+function setMode(mode){ document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
+  $('#viewer-img').src=RES.urls[mode]; $('#legend').style.display=(mode==='authenticity_map'||mode==='confidence')?'flex':'none'; }
+document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+
+// ---- verify ----
+$('#vfile').onchange=async e=>{ const f=e.target.files[0]; if(!f)return;
+  const out=$('#v-out'); out.innerHTML='<span class="spin"></span> Hashing & checking against B2…';
+  const fd=new FormData(); fd.append('file',f);
+  let d; try{ d=await (await fetch('/api/verify',{method:'POST',body:fd})).json(); }
+  catch(err){ out.innerHTML='<p class="err">Verify failed.</p>'; return; }
+  if(d.verified){ out.innerHTML=
+    `<div class="verdict ok">✓ Verified — unaltered ${d.kind}</div>
+     <div class="kv" style="margin-top:12px"><b>sha256</b> ${d.sha256}</div>
+     <div class="kv"><b>asset</b> ${d.asset_id} / ${d.run_id}</div>
+     <div class="disclosure">${(d.manifest&&d.manifest.disclosure_statement)||''}</div>`;
+  } else { out.innerHTML=
+    `<div class="verdict bad">✕ Not verified</div><p class="small muted" style="margin-top:10px">${d.message||''}</p>
+     <div class="kv" style="margin-top:8px"><b>sha256</b> ${d.sha256}</div>`; }
+};
+</script>
+</body>
+</html>
