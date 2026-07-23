@@ -14,7 +14,9 @@ Built for the **Backblaze Generative Media Hackathon** on **Backblaze B2 + Genbl
 
 1. **Restore** — a Genblaze pipeline: ingest → **analyze** (vision LLM describes the photo, dates it, flags damage and *which colors are unknowable*) → **colorize** (multiple independent generations via Genblaze) → **authenticity engine** → durable archive.
 2. **Reveal** — colorization is **luminance-locked** (the AI's color is recombined with the *original's* luminance in LAB space), so the result is provably faithful in structure. Running colorization across independent samples yields a **confidence heatmap** — where the samples agree the inference is grounded; where they disagree, the color is flagged as a guess. Reported on two honest axes: **structure** (kept / enhanced / fabricated) vs **color** (100% inferred).
-3. **Verify** — every result carries a hash-verified provenance manifest stored on B2 next to an immutable original master (Object Lock). The **Verify** page hashes any file and checks it against the B2 catalog — a tamper check that works even off-platform. Refusals are recorded too: if an image model declines a photo (content policy), that is written into provenance rather than hidden.
+3. **Verify** — every restoration is signed with a **real, embedded C2PA Content Credential** (readable in Adobe Content Credentials / any C2PA viewer) that declares the AI color edit as `compositeWithTrainedAlgorithmicMedia` — the **EU AI Act Article 50** machine-readable AI marking — plus a hash-verified provenance manifest stored on B2 next to an immutable master (Object Lock). The **Verify** page checks a file two ways: it reads the **embedded C2PA credential** (trust travels in the file, off-platform) *and* hashes it against the B2 catalog. Refusals are recorded too: if an image model declines a photo (content policy), that is written into provenance rather than hidden.
+
+> The dev signing cert is self-signed (self-provisioned at runtime), so strict verifiers report the *signer* as untrusted — disclosed honestly; a production archive swaps in a CA cert on the C2PA trust list.
 
 ## How it uses Backblaze B2
 

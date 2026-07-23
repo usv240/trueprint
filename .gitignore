@@ -27,3 +27,6 @@ Thumbs.db
 tmp/
 scratch/
 assets/_test_out/
+
+# c2pa dev signing cert (self-provisioned; never commit keys)
+backend/certs/

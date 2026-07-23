@@ -12,7 +12,7 @@ Give Trueprint a historical photo and it:
 1. **Analyzes** it with a vision model (describes the scene, dates it, flags damage and *which colors are unknowable*).
 2. **Restores** it — colorization is **luminance-locked**: we take the AI's color but keep the *original's* luminance, so the result is provably faithful in structure. We never invent the photo itself.
 3. **Reveals** the truth on two honest axes — **structure** (kept/enhanced/fabricated) vs **color** (100% inferred) — plus a **confidence heatmap** built by colorizing multiple times and measuring where the results agree (grounded) vs disagree (a guess).
-4. **Proves** it: a hash-verified provenance manifest is stored on Backblaze B2 next to an immutable original master, with a plain-language disclosure ("colors of the suit and tie are guesses"). A **Verify** page hashes any file and checks it against B2 — tamper detection that works even off-platform. Even provider *refusals* (e.g. an image model declining a photo by policy) are recorded as provenance rather than hidden.
+4. **Proves** it: every restoration is signed with a **real, embedded C2PA Content Credential** (readable in Adobe Content Credentials / any C2PA viewer) declaring the AI color edit as `compositeWithTrainedAlgorithmicMedia` — the **EU AI Act Article 50** machine-readable AI marking — plus a hash-verified provenance manifest on Backblaze B2 next to an immutable master. A **Verify** page checks a file two ways: it reads the embedded C2PA credential (trust travels in the file) *and* hashes it against the B2 catalog. Even provider *refusals* (an image model declining a photo by policy) are recorded as provenance rather than hidden.
 
 ## How it uses Backblaze B2
 B2 is the **system of record**, not a blob store:
@@ -45,7 +45,7 @@ FastAPI backend (upload, **live SSE progress**, result, verify) serving a vanill
 The **confidence heatmap** — real, computed from independent generations, lighting up exactly where the AI is guessing — is something no consumer restoration tool shows. And "structure 100% preserved, color 100% inferred" is not marketing; it's computed and provable.
 
 ## What's next
-Generative damage-repair (fabricated-structure regions), audio restoration, C2PA-signed export, EU AI Act Article 50 labeling, and a batch mode for institutional archives.
+A CA-issued signing cert on the C2PA trust list (dev build self-signs), generative damage-repair via masked inpainting models, audio restoration, IIIF/PREMIS metadata export, and a batch mode for institutional archives.
 
 ## Links
 - **Repo:** https://github.com/usv240/trueprint

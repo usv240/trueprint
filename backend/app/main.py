@@ -85,15 +85,18 @@ def _result_payload(asset_id: str, run_id: str) -> dict:
     auth = manifest.get("authenticity", {})
     stats = {k: auth.get(k) for k in ("pct_original", "pct_enhanced", "pct_fabricated",
                                       "pct_color_inferred", "mean_confidence")}
+    c2pa = manifest.get("c2pa", {})
+    c2pa_key = c2pa.get("b2_key")
     return {
         "asset_id": asset_id, "run_id": run_id, "stats": stats,
         "analysis": manifest.get("analysis", {}),
         "disclosure": manifest.get("disclosure_statement", ""),
         "manifest_sha256": manifest.get("manifest_sha256", ""),
-        "manifest": manifest,
+        "c2pa": c2pa, "manifest": manifest,
         "urls": {
             "master": store().url(manifest["master"]["b2_key"]),
             "restored": store().url(f"{base}/restored.png"),
+            "signed": store().url(c2pa_key) if c2pa_key else None,
             "authenticity_map": store().url(f"{base}/authenticity_map.png"),
             "confidence": store().url(f"{base}/confidence.png"),
             "manifest": store().url(f"{base}/manifest.json"),
@@ -187,6 +190,10 @@ async def verify(file: UploadFile = File(...)):
     """Tamper check: hash the uploaded file, look it up in the B2 catalog."""
     data = await file.read()
     digest = sha256_hex(data)
+    # Path A: embedded C2PA credential (trust travels in the file, industry standard)
+    from . import c2pa_sign
+    credential = c2pa_sign.read_credential(data, mime=file.content_type or "image/png")
+    # Path B: hash lookup against the B2 catalog
     try:
         catalog = store().get("index/catalog.jsonl").decode().splitlines()
     except Exception:
@@ -200,9 +207,14 @@ async def verify(file: UploadFile = File(...)):
             base = f"derivatives/{row['asset_id']}/{row['run_id']}"
             manifest = json.loads(store().get(f"{base}/manifest.json"))
             kind = "restored derivative" if digest == row.get("derivative_sha256") else "original master"
-            return {"verified": True, "kind": kind, "sha256": digest,
+            return {"verified": True, "kind": kind, "sha256": digest, "c2pa": credential,
                     "asset_id": row["asset_id"], "run_id": row["run_id"], "manifest": manifest}
-    return {"verified": False, "sha256": digest,
+    # not in catalog — but an embedded C2PA credential may still prove provenance off-platform
+    if credential:
+        return {"verified": True, "kind": "C2PA Content Credential (embedded)", "sha256": digest,
+                "c2pa": credential, "via": "embedded-credential",
+                "message": "Not found in this B2 catalog, but the file carries an embedded Trueprint C2PA credential."}
+    return {"verified": False, "sha256": digest, "c2pa": None,
             "message": "No matching record. This file was not produced by Trueprint, or it has been modified."}
 
 

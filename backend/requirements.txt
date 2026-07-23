@@ -12,3 +12,5 @@ boto3
 reportlab
 httpx
 python-multipart
+c2pa-python
+cryptography

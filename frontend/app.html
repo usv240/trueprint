@@ -160,9 +160,12 @@
             </div>
             <details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">Vision analysis</summary>
               <pre class="mono small" id="m-analysis" style="white-space:pre-wrap;color:var(--muted);margin-top:8px"></pre></details>
+            <div class="disclosure" id="m-c2pa" style="border-left-color:var(--verify);display:none"></div>
             <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
               <a class="btn btn-ghost small" id="dl-restored" download>Download restored</a>
+              <a class="btn btn-ghost small" id="dl-signed" download style="display:none">Download signed (C2PA)</a>
               <a class="btn btn-ghost small" id="dl-manifest" target="_blank">View manifest</a>
+              <a class="btn btn-ghost small" href="https://contentcredentials.org/verify" target="_blank">Verify at Content Credentials ↗</a>
             </div>
           </div>
         </div>
@@ -190,7 +193,7 @@ const $ = s => document.querySelector(s);
 const STEP_LABELS = {ingest:"Ingest master → B2 (Object Lock)", repair:"Repair damage (OpenCV inpaint)",
   analyze:"Analyze damage (Gemini)", colorize_0:"Colorize · sample 1 (Genblaze)",
   colorize_1:"Colorize · sample 2 (Genblaze)", authenticity:"Authenticity map + confidence",
-  archive:"Archive + provenance manifest → B2"};
+  c2pa:"Sign C2PA Content Credential", archive:"Archive + provenance manifest → B2"};
 
 // ---- tabs ----
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
@@ -267,6 +270,16 @@ function renderResult(res){ RES=res; $('#result').classList.remove('hidden');
   const pv=m.providers||{}; $('#m-models').textContent=[pv.vision,pv.colorize].filter(Boolean).join(' · ');
   $('#m-analysis').textContent=JSON.stringify(m.analysis||res.analysis||{},null,2);
   $('#dl-restored').href=res.urls.restored; $('#dl-manifest').href=res.urls.manifest;
+  const c=res.c2pa||m.c2pa||{};
+  const cel=$('#m-c2pa');
+  if(c.embedded){ cel.style.display='';
+    cel.innerHTML='<b>✓ C2PA Content Credential embedded.</b> AI edit declared as '
+      +'<span class="mono">'+(c.ai_marking||'trainedAlgorithmicMedia')+'</span>. '
+      +'Signer: self-signed dev cert (untrusted by design — a production archive uses a trust-list CA). '
+      +'Readable in any C2PA viewer.'; }
+  else { cel.style.display='none'; }
+  if(res.urls&&res.urls.signed){ $('#dl-signed').href=res.urls.signed; $('#dl-signed').style.display=''; }
+  else { $('#dl-signed').style.display='none'; }
 }
 function setMode(mode){ document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
   $('#viewer-img').src=RES.urls[mode]; $('#legend').style.display=(mode==='authenticity_map'||mode==='confidence')?'flex':'none'; }
@@ -278,14 +291,16 @@ $('#vfile').onchange=async e=>{ const f=e.target.files[0]; if(!f)return;
   const fd=new FormData(); fd.append('file',f);
   let d; try{ d=await (await fetch('/api/verify',{method:'POST',body:fd})).json(); }
   catch(err){ out.innerHTML='<p class="err">Verify failed.</p>'; return; }
+  const c=d.c2pa; const cred = (c&&c.present) ?
+    `<div class="disclosure" style="border-left-color:var(--verify);margin-top:10px"><b>Embedded C2PA credential</b> — validation: <span class="mono">${c.validation_state}</span>. Actions: ${(c.actions||[]).map(a=>a.action+(a.ai?' (AI)':'')).join(', ')||'—'}. <span class="small muted">(“Invalid” = self-signed dev cert, untrusted by design.)</span></div>` : '';
   if(d.verified){ out.innerHTML=
-    `<div class="verdict ok">✓ Verified — unaltered ${d.kind}</div>
+    `<div class="verdict ok">✓ Verified — ${d.kind}</div>
      <div class="kv" style="margin-top:12px"><b>sha256</b> ${d.sha256}</div>
-     <div class="kv"><b>asset</b> ${d.asset_id} / ${d.run_id}</div>
-     <div class="disclosure">${(d.manifest&&d.manifest.disclosure_statement)||''}</div>`;
+     ${d.asset_id?`<div class="kv"><b>asset</b> ${d.asset_id} / ${d.run_id||''}</div>`:''}
+     <div class="disclosure">${(d.manifest&&d.manifest.disclosure_statement)||d.message||''}</div>${cred}`;
   } else { out.innerHTML=
     `<div class="verdict bad">✕ Not verified</div><p class="small muted" style="margin-top:10px">${d.message||''}</p>
-     <div class="kv" style="margin-top:8px"><b>sha256</b> ${d.sha256}</div>`; }
+     <div class="kv" style="margin-top:8px"><b>sha256</b> ${d.sha256}</div>${cred}`; }
 };
 </script>
 </body>

@@ -204,6 +204,25 @@ class RestorePipeline:
 
         # 6) manifest
         disclosure = self._disclosure(stats, analysis, declined=declined)
+
+        # 6b) embed a real, signed C2PA Content Credential (zero cost, best-effort).
+        #     Declares the AI color edit (EU AI Act Article 50 machine-readable marking).
+        progress({"step": "c2pa", "status": "running"})
+        from . import c2pa_sign
+        c2pa_man = c2pa_sign.build_manifest(
+            title=f"Restored: {filename}", stats=stats.to_dict(),
+            models={"vision": config.GMI_MODEL_VISION, "colorize": config.GMI_MODEL_RECOLOR},
+            master_sha256=master.sha256, disclosure=disclosure, declined=declined)
+        signed_png, c2pa_status = c2pa_sign.sign_png(restored_png, c2pa_man)
+        c2pa_key = None
+        if signed_png:
+            c2pa_key = f"derivatives/{asset_id}/{run_id}/restored_c2pa.png"
+            self.store.put_derivative(asset_id, run_id, "restored_c2pa.png", signed_png, "image/png")
+        steps.append(StepRecord("c2pa", "c2pa", "content-credentials",
+                                "PROVENANCE", "ok" if signed_png else "skipped",
+                                detail={"status": c2pa_status}))
+        progress({"step": "c2pa", "status": "ok" if signed_png else "skipped"})
+
         manifest = {
             "trueprint_version": "0.1",
             "asset_id": asset_id, "run_id": run_id, "created": ISO(),
@@ -215,6 +234,10 @@ class RestorePipeline:
             "authenticity": {**stats.to_dict(),
                              "map": f"derivatives/{asset_id}/{run_id}/authenticity_map.png",
                              "confidence": f"derivatives/{asset_id}/{run_id}/confidence.png"},
+            "c2pa": {"embedded": bool(signed_png), "status": c2pa_status, "standard": "C2PA 2.x",
+                     "signer": "self-signed dev cert (untrusted by design; production uses a trust-list CA)",
+                     "ai_marking": "compositeWithTrainedAlgorithmicMedia (EU AI Act Article 50)",
+                     "b2_key": c2pa_key},
             "analysis": analysis,
             "disclosure_statement": disclosure,
             "genblaze_runs": [self._gb_manifest_summary(m) for m in gb_manifests],
@@ -239,9 +262,11 @@ class RestorePipeline:
             "asset_id": asset_id, "run_id": run_id,
             "stats": stats.to_dict(), "analysis": analysis, "disclosure": disclosure,
             "manifest_sha256": manifest["manifest_sha256"],
+            "c2pa": manifest["c2pa"],
             "urls": {
                 "master": master_url,
                 "restored": self.store.url(f"{base}/restored.png"),
+                "signed": self.store.url(c2pa_key) if c2pa_key else None,
                 "authenticity_map": self.store.url(f"{base}/authenticity_map.png"),
                 "confidence": self.store.url(f"{base}/confidence.png"),
                 "manifest": self.store.url(f"{base}/manifest.json"),
