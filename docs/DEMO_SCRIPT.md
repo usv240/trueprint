@@ -31,11 +31,13 @@ restored file for the "tamper" beat (or flip one byte).
 *Point at the provenance panel.*
 > "Every choice is disclosed in plain language — 'colors of the suit and tie are guesses' — with the models used and cryptographic hashes."
 
-### 2:05–2:40 · Prove it (B2 + Verify)
-*Screen: briefly show the B2 bucket — masters / derivatives / manifest.json. Then `/verify`, drop the restored file.*
-> "All of it — the immutable master, the restoration, and a hash-verified provenance manifest — lives on Backblaze B2. And trust travels with the file: drop any Trueprint image into Verify and it re-checks the hash against B2."
-*Green "Verified".* Then flip one byte / drop a different file → *red.*
-> "Verified. Tamper with even one byte…" *(red)* "…and it's caught."
+### 2:05–2:45 · Prove it (C2PA + B2 + Verify)
+*Screen: the provenance panel — point at the green "C2PA Content Credential embedded" badge. Click "Download signed (C2PA)."*
+> "Every restoration is signed with a real, embedded C2PA Content Credential — the industry standard behind Adobe, the BBC and the New York Times. It declares the AI color edit in machine-readable form, which is exactly what the EU AI Act now requires."
+*Screen: drop the signed file into contentcredentials.org/verify (or our /verify).*
+> "So I can verify it anywhere — here in Adobe's own Content Credentials tool — and it shows what AI did. All of it also lives on Backblaze B2: the immutable master, the restoration, the manifest."
+*Our `/verify`: green.* Then flip one byte / drop a different file → *red.*
+> "Trust travels with the file. Tamper with even one byte…" *(red)* "…and it's caught."
 
 ### 2:40–3:00 · Close
 *Screen: back to the authenticity view.*
