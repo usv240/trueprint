@@ -1,0 +1,242 @@
+"""Trueprint restoration pipeline — orchestrates Genblaze generation, the
+authenticity engine, and the Backblaze B2 provenance archive.
+
+Flow:
+  1. Ingest the grayscale master -> immutable B2 object (Object Lock).
+  2. Analyze damage/scene with a vision model (Gemini via GMI chat).
+  3. Colorize N independent samples via Genblaze (gpt-image-2-edit), each
+     luminance-locked to the original so the result stays structurally faithful.
+  4. Authenticity engine: multi-sample confidence + region classification.
+  5. Assemble a hash-verified provenance manifest (+ Genblaze run manifests).
+  6. Write derivatives + manifest to the B2 dual archive; append the catalog.
+"""
+from __future__ import annotations
+import json, uuid, datetime as dt, hashlib
+from dataclasses import dataclass, field
+from typing import Any, Callable
+import httpx
+
+from .config import config
+from .storage import B2Store, sha256_hex
+from . import authenticity as A
+
+ISO = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+Progress = Callable[[dict], None]
+
+
+def _noop(_: dict) -> None: ...
+
+
+# Prompts kept neutral: wording like "facial feature"/"faces" can trip image-model
+# people-moderation filters on historical photos. These pass reliably.
+COLORIZE_PROMPTS = [
+    "Colorize this black-and-white photograph with natural, realistic, period-accurate colors. "
+    "Keep all detail and the composition unchanged.",
+    "Add subtle, historically plausible color to this vintage monochrome photograph. "
+    "Muted, natural palette; keep the composition identical.",
+]
+
+
+@dataclass
+class StepRecord:
+    step: str
+    provider: str
+    model: str
+    operation: str            # ORIGINAL/ENHANCED/FABRICATED/ANALYZE
+    status: str
+    input_sha256: str | None = None
+    output_sha256: str | None = None
+    detail: dict = field(default_factory=dict)
+
+
+class RestorePipeline:
+    def __init__(self) -> None:
+        config.require_b2(); config.require_gmi()
+        from .providers import TrueprintImageProvider
+        self.store = B2Store()
+        self.image_provider = TrueprintImageProvider(
+            api_key=config.GMI_API_KEY, base_url=config.GMI_IMAGE_BASE_URL)
+
+    # ---------------------------------------------------------------- helpers
+    def _vision_analyze(self, image_url: str) -> dict:
+        prompt = ("You are assisting archival restoration. Look at this historical photo and reply "
+                  "with STRICT JSON: {\"description\": str, \"era_guess\": str, "
+                  "\"damage\": [str], \"uncertain_colors\": [str]}. "
+                  "‘uncertain_colors’ = things whose real color cannot be known from a B&W photo.")
+        body = {
+            "model": config.GMI_MODEL_VISION,
+            "messages": [{"role": "user", "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ]}],
+            "max_tokens": 900, "temperature": 0.2,
+        }
+        headers = {"Authorization": f"Bearer {config.GMI_API_KEY}"}
+        with httpx.Client(timeout=90) as c:
+            r = c.post(f"{config.GMI_CHAT_BASE_URL}/chat/completions", json=body, headers=headers)
+            r.raise_for_status()
+            content = r.json()["choices"][0]["message"]["content"] or ""
+        try:
+            s = content[content.find("{"): content.rfind("}") + 1]
+            return json.loads(s)
+        except Exception:
+            return {"description": content.strip()[:400], "era_guess": "", "damage": [], "uncertain_colors": []}
+
+    def _genblaze_colorize(self, image_url: str, prompt: str, model: str) -> tuple[bytes | None, Any, str | None]:
+        """Run one colorization through a Genblaze Pipeline; return (bytes, manifest, out_url)."""
+        import genblaze as g
+        pipe = g.Pipeline("trueprint-colorize").step(
+            self.image_provider, model=model, prompt=prompt, modality=g.Modality.IMAGE,
+            external_inputs=[g.Asset(url=image_url, media_type="image/png")])
+        res = pipe.run(timeout=300, raise_on_failure=False)
+        run = getattr(res, "run", None)
+        for s in (getattr(run, "steps", []) or []):
+            if str(getattr(s, "status", "")).endswith("succeeded"):
+                for a in (getattr(s, "assets", []) or []):
+                    url = getattr(a, "url", None)
+                    if url:
+                        data = httpx.get(url, timeout=90).content
+                        return data, getattr(res, "manifest", None), url
+        return None, getattr(res, "manifest", None), None
+
+    # ------------------------------------------------------------------- run
+    def run(self, image_bytes: bytes, filename: str, *, progress: Progress = _noop,
+            samples: int = 2) -> dict:
+        asset_id = "tp_" + uuid.uuid4().hex[:12]
+        run_id = "run_" + uuid.uuid4().hex[:8]
+        ext = (filename.rsplit(".", 1)[-1] or "jpg").lower()
+        steps: list[StepRecord] = []
+        gb_manifests: list[Any] = []
+
+        # 1) ingest master (immutable)
+        progress({"step": "ingest", "status": "running"})
+        master = self.store.put_master(asset_id, image_bytes, ext, f"image/{'jpeg' if ext in ('jpg','jpeg') else ext}",
+                                       lock_days=3, source={"filename": filename})
+        original = A.load_rgb(image_bytes)
+        master_url = self.store.url(f"masters/{asset_id}/original.{ext}", expires_in=3600)
+        steps.append(StepRecord("ingest", "backblaze-b2", "-", "ORIGINAL", "ok",
+                                output_sha256=master.sha256, detail={"object_lock": True}))
+        progress({"step": "ingest", "status": "ok", "sha256": master.sha256})
+
+        # 2) analyze
+        progress({"step": "analyze", "status": "running"})
+        try:
+            analysis = self._vision_analyze(master_url)
+            steps.append(StepRecord("analyze", "gmicloud-chat", config.GMI_MODEL_VISION,
+                                    "ANALYZE", "ok", detail=analysis))
+        except Exception as e:
+            analysis = {"description": "", "damage": [], "uncertain_colors": []}
+            steps.append(StepRecord("analyze", "gmicloud-chat", config.GMI_MODEL_VISION,
+                                    "ANALYZE", "skipped", detail={"error": str(e)[:200]}))
+        progress({"step": "analyze", "status": "ok", "analysis": analysis})
+
+        # 3) colorize N samples (independent) via Genblaze
+        ai_samples: list[Any] = []
+        for i in range(max(1, samples)):
+            prompt = COLORIZE_PROMPTS[i % len(COLORIZE_PROMPTS)]
+            model = config.GMI_MODEL_RECOLOR
+            progress({"step": f"colorize_{i}", "status": "running", "model": model})
+            data, gbm, out_url = self._genblaze_colorize(master_url, prompt, model)
+            if data:
+                ai = A.load_rgb(data)
+                ai_samples.append(ai)
+                if gbm is not None:
+                    gb_manifests.append(gbm)
+                self.store.put_step_artifact(asset_id, run_id, f"colorize_{i}", "raw.png",
+                                             A.to_png(ai), "image/png")
+                steps.append(StepRecord(f"colorize_{i}", "gmicloud-image", model, "FABRICATED", "ok",
+                                        input_sha256=master.sha256, output_sha256=sha256_hex(data),
+                                        detail={"prompt": prompt, "output_url": out_url}))
+                progress({"step": f"colorize_{i}", "status": "ok"})
+            else:
+                steps.append(StepRecord(f"colorize_{i}", "gmicloud-image", model, "FABRICATED", "failed",
+                                        detail={"prompt": prompt}))
+                progress({"step": f"colorize_{i}", "status": "failed"})
+
+        if not ai_samples:
+            raise RuntimeError("All colorization samples failed")
+
+        # 4) authenticity engine
+        progress({"step": "authenticity", "status": "running"})
+        final_rgb = A.colorize_recombine(original, ai_samples[0])   # luminance-locked
+        confidence, mean_conf = A.color_confidence(original, ai_samples)
+        cls, stats = A.classify(original, final_rgb, confidence=confidence)
+        restored_png = A.to_png(final_rgb)
+        overlay_png = A.render_overlay(original, cls)
+        confidence_png = A.render_confidence(original, confidence)
+        steps.append(StepRecord("authenticity", "trueprint", "authenticity-engine-v1",
+                                "ENHANCED", "ok", output_sha256=sha256_hex(restored_png),
+                                detail={**stats.to_dict(), "samples": len(ai_samples)}))
+        progress({"step": "authenticity", "status": "ok", "stats": stats.to_dict()})
+
+        # 5) write derivatives
+        progress({"step": "archive", "status": "running"})
+        d_restored = self.store.put_derivative(asset_id, run_id, "restored.png", restored_png, "image/png")
+        self.store.put_derivative(asset_id, run_id, "authenticity_map.png", overlay_png, "image/png")
+        self.store.put_derivative(asset_id, run_id, "confidence.png", confidence_png, "image/png")
+
+        # 6) manifest
+        disclosure = self._disclosure(stats, analysis)
+        manifest = {
+            "trueprint_version": "0.1",
+            "asset_id": asset_id, "run_id": run_id, "created": ISO(),
+            "master": {"sha256": master.sha256, "b2_key": f"masters/{asset_id}/original.{ext}",
+                       "object_lock": True},
+            "derivative": {"sha256": d_restored.sha256,
+                           "b2_key": f"derivatives/{asset_id}/{run_id}/restored.png"},
+            "pipeline": [s.__dict__ for s in steps],
+            "authenticity": {**stats.to_dict(),
+                             "map": f"derivatives/{asset_id}/{run_id}/authenticity_map.png",
+                             "confidence": f"derivatives/{asset_id}/{run_id}/confidence.png"},
+            "analysis": analysis,
+            "disclosure_statement": disclosure,
+            "genblaze_runs": [self._gb_manifest_summary(m) for m in gb_manifests],
+            "providers": {"vision": config.GMI_MODEL_VISION, "colorize": config.GMI_MODEL_RECOLOR,
+                          "storage": "backblaze-b2"},
+        }
+        manifest["manifest_sha256"] = sha256_hex(
+            json.dumps(manifest, sort_keys=True, default=str).encode())
+        manifest_bytes = json.dumps(manifest, indent=2, default=str).encode()
+        self.store.put_derivative(asset_id, run_id, "manifest.json", manifest_bytes, "application/json")
+
+        # 7) catalog
+        self.store.append_catalog({
+            "asset_id": asset_id, "run_id": run_id, "filename": filename,
+            "pct_fabricated": stats.pct_fabricated, "mean_confidence": stats.mean_confidence,
+            "master_sha256": master.sha256, "derivative_sha256": d_restored.sha256,
+        })
+        progress({"step": "archive", "status": "ok"})
+
+        base = f"derivatives/{asset_id}/{run_id}"
+        return {
+            "asset_id": asset_id, "run_id": run_id,
+            "stats": stats.to_dict(), "analysis": analysis, "disclosure": disclosure,
+            "manifest_sha256": manifest["manifest_sha256"],
+            "urls": {
+                "master": master_url,
+                "restored": self.store.url(f"{base}/restored.png"),
+                "authenticity_map": self.store.url(f"{base}/authenticity_map.png"),
+                "confidence": self.store.url(f"{base}/confidence.png"),
+                "manifest": self.store.url(f"{base}/manifest.json"),
+            },
+            "manifest": manifest,
+        }
+
+    # ------------------------------------------------------------- utilities
+    @staticmethod
+    def _disclosure(stats: A.Authenticity, analysis: dict) -> str:
+        parts = [f"This image was digitally restored with AI. ~{stats.pct_fabricated:.0f}% of pixels "
+                 f"are AI-inferred, including all color."]
+        if analysis.get("uncertain_colors"):
+            parts.append("Colors of " + ", ".join(analysis["uncertain_colors"][:3]) + " are guesses.")
+        parts.append("The original master is preserved unaltered on Backblaze B2.")
+        return " ".join(parts)
+
+    @staticmethod
+    def _gb_manifest_summary(m: Any) -> dict:
+        if m is None:
+            return {}
+        for attr in ("run_id", "hash", "manifest_hash"):
+            if hasattr(m, attr):
+                pass
+        return {"run_id": getattr(m, "run_id", None), "hash": str(getattr(m, "hash", ""))[:24]}
