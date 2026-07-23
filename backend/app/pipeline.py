@@ -153,14 +153,22 @@ class RestorePipeline:
                                         detail={"prompt": prompt}))
                 progress({"step": f"colorize_{i}", "status": "failed"})
 
-        if not ai_samples:
-            raise RuntimeError("All colorization samples failed")
+        declined = not ai_samples  # every colorizer refused (e.g. content policy)
 
         # 4) authenticity engine
         progress({"step": "authenticity", "status": "running"})
-        final_rgb = A.colorize_recombine(original, ai_samples[0])   # luminance-locked
-        confidence, mean_conf = A.color_confidence(original, ai_samples)
-        cls, stats = A.classify(original, final_rgb, confidence=confidence)
+        if declined:
+            # On-thesis graceful path: the refusal itself is provenance. We keep the
+            # original unaltered and record that AI colorization was declined.
+            final_rgb = original
+            confidence, mean_conf = A.color_confidence(original, [])
+            cls, stats = A.classify(original, final_rgb, confidence=confidence)
+            stats.notes.insert(0, "AI colorization was declined for this image (provider content policy); "
+                                  "the original is shown unaltered. The refusal is recorded in provenance.")
+        else:
+            final_rgb = A.colorize_recombine(original, ai_samples[0])   # luminance-locked
+            confidence, mean_conf = A.color_confidence(original, ai_samples)
+            cls, stats = A.classify(original, final_rgb, confidence=confidence)
         restored_png = A.to_png(final_rgb)
         overlay_png = A.render_overlay(original, cls)
         confidence_png = A.render_confidence(original, confidence)
@@ -176,7 +184,7 @@ class RestorePipeline:
         self.store.put_derivative(asset_id, run_id, "confidence.png", confidence_png, "image/png")
 
         # 6) manifest
-        disclosure = self._disclosure(stats, analysis)
+        disclosure = self._disclosure(stats, analysis, declined=declined)
         manifest = {
             "trueprint_version": "0.1",
             "asset_id": asset_id, "run_id": run_id, "created": ISO(),
@@ -224,7 +232,11 @@ class RestorePipeline:
 
     # ------------------------------------------------------------- utilities
     @staticmethod
-    def _disclosure(stats: A.Authenticity, analysis: dict) -> str:
+    def _disclosure(stats: A.Authenticity, analysis: dict, declined: bool = False) -> str:
+        if declined:
+            return ("AI colorization was declined for this image by the provider's content policy, so "
+                    "the original is shown unaltered. This refusal is recorded in the provenance manifest. "
+                    "The original master is preserved on Backblaze B2.")
         parts = [f"This image was digitally restored with AI. The original structure is preserved "
                  f"(luminance locked to the master); all color is AI-inferred "
                  f"(~{stats.pct_color_inferred:.0f}% of the image carries added color, mean colorizer "

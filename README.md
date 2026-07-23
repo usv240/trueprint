@@ -12,9 +12,9 @@ Built for the **Backblaze Generative Media Hackathon** on **Backblaze B2 + Genbl
 
 ## What it does
 
-1. **Restore** — a Genblaze pipeline chains specialist models: analyze damage → inpaint → recolor → (audio) restore, with fallback models and retries.
-2. **Reveal** — an authenticity map classifies every region as original / enhanced / fabricated, recorded *at generation time* (not guessed after), with a multi-provider confidence heatmap.
-3. **Verify** — every result carries a hash-verified provenance manifest, embedded in the file and stored on B2 next to an immutable original master (Object Lock). A public Verify page detects tampering even off-platform.
+1. **Restore** — a Genblaze pipeline: ingest → **analyze** (vision LLM describes the photo, dates it, flags damage and *which colors are unknowable*) → **colorize** (multiple independent generations via Genblaze) → **authenticity engine** → durable archive.
+2. **Reveal** — colorization is **luminance-locked** (the AI's color is recombined with the *original's* luminance in LAB space), so the result is provably faithful in structure. Running colorization across independent samples yields a **confidence heatmap** — where the samples agree the inference is grounded; where they disagree, the color is flagged as a guess. Reported on two honest axes: **structure** (kept / enhanced / fabricated) vs **color** (100% inferred).
+3. **Verify** — every result carries a hash-verified provenance manifest stored on B2 next to an immutable original master (Object Lock). The **Verify** page hashes any file and checks it against the B2 catalog — a tamper check that works even off-platform. Refusals are recorded too: if an image model declines a photo (content policy), that is written into provenance rather than hidden.
 
 ## How it uses Backblaze B2
 
@@ -23,24 +23,20 @@ Built for the **Backblaze Generative Media Hackathon** on **Backblaze B2 + Genbl
 
 ## How it uses Genblaze
 
-- Multi-provider, multi-modal orchestration (image + audio) with `fallback_models` and retries.
-- Hash-verified provenance manifests embedded into output media.
-- Parent→child run lineage for iterative refinement.
-- Multi-provider corroboration (running colorization across independent models) to quantify confidence.
+- **Orchestration** of each restoration through the Genblaze `Pipeline` (steps, inputs, provider abstraction).
+- A **custom provider** (`TrueprintImageProvider`, subclassing `GMICloudImageProvider`) emits the request-queue payload the image model expects — keeping all of Genblaze's Pipeline / manifest / lineage machinery.
+- **Multi-sample corroboration** — independent colorizations are compared to quantify per-pixel confidence.
+- **Provenance manifests** from each run are folded into Trueprint's manifest, hash-verified, and archived on B2.
 
 ## Providers & models used
 
-| Role | Provider | Model (current) |
-|---|---|---|
-| Vision / analysis / LLM-judge | GMI Cloud | `google/gemini-3.6-flash` |
-| Damage inpaint / fill | GMI Cloud (Bria) | `bria-genfill` |
-| Restoration | GMI Cloud (Bria) | `bria-fibo-restore` |
-| Recolor / colorize | GMI Cloud (Bria) | `bria-fibo-recolor` |
-| Colorize (corroboration) | GMI Cloud | `hunyuan-image-to-image`, `seededit-3-0-i2i-250628` |
-| Audio restore (flourish) | GMI Cloud | _TBD (Phase 4)_ |
-| Storage | Backblaze B2 (S3) | — |
+| Role | Provider | Model | Notes |
+|---|---|---|---|
+| Vision analysis + uncertain-color detection | GMI Cloud | `google/gemini-3.6-flash` | multimodal, via OpenAI-compatible chat API |
+| Colorization (×2 independent samples) | GMI Cloud | `gpt-image-2-edit` | instruction image-to-image, via the request queue |
+| Storage / system of record | Backblaze B2 (S3) | — | masters + derivatives + manifests + catalog |
 
-_Model IDs are validated against the live GMI model library during setup and may be adjusted._
+_Colorization is luminance-locked in the authenticity engine (OpenCV/NumPy) so the AI supplies color only; the original structure is preserved. Other GMI models were evaluated — `bria-fibo-restore` (restore), `hunyuan-image-to-image` (i2i) — and are configurable in `.env`; `gpt-image-2-edit` gave the most faithful colorization. It declines photos containing minors (provider policy); Trueprint records such refusals in provenance and degrades gracefully._
 
 ## Setup
 
@@ -53,11 +49,16 @@ pip install -r backend/requirements.txt
 cp .env.example .env       # then fill in B2 + GMI values (see .env.example)
 
 # 3. Validate connections
-python scripts/test_b2.py          # round-trips a file through B2
-python scripts/test_gmi.py         # calls the GMI vision model
+python scripts/validate.py          # B2 round-trip + GMI reachability
 
-# 4. Run the backend
-uvicorn backend.app.main:app --reload
+# 4. (optional) pre-cache sample restorations for an instant demo
+python scripts/precache.py
+
+# 5. Run the app (serves landing, /app, and the API)
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+#   landing  http://localhost:8000/
+#   app      http://localhost:8000/app
+#   verify   http://localhost:8000/verify
 ```
 
 `.env` is git-ignored — never commit real keys. See `.env.example` for the full list.

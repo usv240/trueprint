@@ -114,7 +114,8 @@
           <input id="file" type="file" accept="image/*" class="hidden"></label>
         <p class="small muted" id="chosen" style="margin-top:8px"></p>
         <button class="btn btn-primary" id="run" style="width:100%;justify-content:center;margin-top:14px" disabled>Restore</button>
-        <p class="small muted" style="margin-top:10px">Adult-subject historical photos work best — some image models decline photos with children.</p>
+        <label class="small muted" style="display:flex;gap:7px;align-items:center;margin-top:10px"><input type="checkbox" id="runlive"> Run live (slower — shows the full pipeline)</label>
+        <p class="small muted" style="margin-top:8px">Adult-subject historical photos work best — some image models decline photos with children.</p>
       </div>
 
       <!-- output -->
@@ -198,15 +199,17 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
 });
 
 // ---- samples ----
-let chosenSample=null, chosenFile=null;
+let chosenSample=null, chosenFile=null; const SAMPLE_CACHED={}, SAMPLE_LABEL={};
 fetch('/api/samples').then(r=>r.json()).then(list=>{
   const el=$('#samples');
   list.forEach(s=>{
+    SAMPLE_CACHED[s.name]=s.cached; SAMPLE_LABEL[s.name]=s.label;
     const b=document.createElement('button'); b.setAttribute('aria-pressed','false'); b.title=s.label;
     b.innerHTML=`<img src="${s.url}" alt="${s.label}">`;
     b.onclick=()=>{chosenSample=s.name;chosenFile=null;
       document.querySelectorAll('#samples button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
-      $('#chosen').textContent='Selected: '+s.label; $('#run').disabled=false;};
+      $('#chosen').textContent='Selected: '+s.label+(s.cached?'  ·  ⚡ instant':'');
+      $('#run').disabled=false;};
     el.appendChild(b);
   });
 }).catch(()=>{$('#samples').innerHTML='<p class="small err">Backend not reachable.</p>';});
@@ -224,6 +227,14 @@ function stepRow(key){let r=document.querySelector(`.stp[data-key="${key}"]`);
 $('#run').onclick=async()=>{
   $('#run').disabled=true; $('#result').classList.add('hidden'); $('#steps').innerHTML=''; $('#run-err').textContent='';
   Object.keys(STEP_LABELS).forEach(k=>stepRow(k));
+  // instant path: cached sample (unless "run live" is checked)
+  if(chosenSample && SAMPLE_CACHED[chosenSample] && !$('#runlive').checked){
+    Object.keys(STEP_LABELS).forEach(k=>{stepRow(k).dataset.s='ok';});
+    try{ const res=await (await fetch('/api/cached/'+encodeURIComponent(chosenSample))).json();
+         renderResult(res); }
+    catch(e){ $('#run-err').textContent='Could not load cached result.'; }
+    $('#run').disabled=false; return;
+  }
   const fd=new FormData();
   if(chosenSample) fd.append('sample',chosenSample); else if(chosenFile) fd.append('file',chosenFile);
   let job;

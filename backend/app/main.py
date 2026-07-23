@@ -72,13 +72,52 @@ def health():
             "colorize": config.GMI_MODEL_RECOLOR}
 
 
+def _precache_map() -> dict:
+    try:
+        return json.loads(store().get("index/precache.json"))
+    except Exception:
+        return {}
+
+
+def _result_payload(asset_id: str, run_id: str) -> dict:
+    base = f"derivatives/{asset_id}/{run_id}"
+    manifest = json.loads(store().get(f"{base}/manifest.json"))
+    auth = manifest.get("authenticity", {})
+    stats = {k: auth.get(k) for k in ("pct_original", "pct_enhanced", "pct_fabricated",
+                                      "pct_color_inferred", "mean_confidence")}
+    return {
+        "asset_id": asset_id, "run_id": run_id, "stats": stats,
+        "analysis": manifest.get("analysis", {}),
+        "disclosure": manifest.get("disclosure_statement", ""),
+        "manifest_sha256": manifest.get("manifest_sha256", ""),
+        "manifest": manifest,
+        "urls": {
+            "master": store().url(manifest["master"]["b2_key"]),
+            "restored": store().url(f"{base}/restored.png"),
+            "authenticity_map": store().url(f"{base}/authenticity_map.png"),
+            "confidence": store().url(f"{base}/confidence.png"),
+            "manifest": store().url(f"{base}/manifest.json"),
+        },
+    }
+
+
 @app.get("/api/samples")
 def samples():
+    cache = _precache_map()
     out = []
     for p in sorted(SAMPLES.glob("*.jpg")):
         out.append({"name": p.name, "url": f"/api/sample/{p.name}",
-                    "label": p.stem.replace("_", " ").title()})
+                    "label": p.stem.replace("_", " ").title(),
+                    "cached": p.name in cache})
     return out
+
+
+@app.get("/api/cached/{name}")
+def cached(name: str):
+    entry = _precache_map().get(name)
+    if not entry:
+        raise HTTPException(404, "no cached result")
+    return _result_payload(entry["asset_id"], entry["run_id"])
 
 
 @app.get("/api/sample/{name}")
@@ -137,19 +176,10 @@ def restore_stream(job_id: str):
 
 @app.get("/api/result/{asset_id}/{run_id}")
 def result(asset_id: str, run_id: str):
-    base = f"derivatives/{asset_id}/{run_id}"
     try:
-        manifest = json.loads(store().get(f"{base}/manifest.json"))
+        return _result_payload(asset_id, run_id)
     except Exception:
         raise HTTPException(404, "result not found")
-    ext = manifest["master"]["b2_key"].rsplit(".", 1)[-1]
-    return {"manifest": manifest, "urls": {
-        "master": store().url(manifest["master"]["b2_key"]),
-        "restored": store().url(f"{base}/restored.png"),
-        "authenticity_map": store().url(f"{base}/authenticity_map.png"),
-        "confidence": store().url(f"{base}/confidence.png"),
-        "manifest": store().url(f"{base}/manifest.json"),
-    }}
 
 
 @app.post("/api/verify")
