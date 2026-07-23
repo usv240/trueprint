@@ -151,6 +151,7 @@
               <div class="stat"><div class="v" id="s-conf">–</div><div class="k">Confidence</div></div>
             </div>
             <div class="disclosure" id="disclosure"></div>
+            <div class="disclosure" id="m-verify" style="display:none;margin-top:8px"></div>
             <div style="margin-top:12px">
               <div class="kv"><b>asset</b> <span id="m-asset"></span></div>
               <div class="kv"><b>master sha256</b> <span id="m-master"></span></div>
@@ -193,7 +194,8 @@ const $ = s => document.querySelector(s);
 const STEP_LABELS = {ingest:"Ingest master → B2 (Object Lock)", repair:"Repair damage (OpenCV inpaint)",
   analyze:"Analyze damage (Gemini)", colorize_0:"Colorize · sample 1 (Genblaze)",
   colorize_1:"Colorize · sample 2 (Genblaze)", authenticity:"Authenticity map + confidence",
-  c2pa:"Sign C2PA Content Credential", archive:"Archive + provenance manifest → B2"};
+  verify:"Faithfulness check (LLM-as-judge)", c2pa:"Sign C2PA Content Credential",
+  archive:"Archive + provenance manifest → B2"};
 
 // ---- tabs ----
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
@@ -263,6 +265,14 @@ function renderResult(res){ RES=res; $('#result').classList.remove('hidden');
   $('#s-fab').textContent=(s.pct_fabricated??'–')+'%'; $('#s-conf').textContent=Math.round((s.mean_confidence??0)*100)+'%';
   $('#disclosure').textContent=res.disclosure||'';
   const m=res.manifest||{};
+  const v=(res.manifest&&res.manifest.verification)||res.verification;
+  const vel=$('#m-verify');
+  if(v && !v.skipped){ vel.style.display='';
+    const ok=v.passed; vel.style.borderLeftColor=ok?'var(--verify)':'var(--fabricated)';
+    vel.innerHTML='<b>'+(ok?'✓ Faithfulness check passed':'⚠ Faithfulness flagged')+'</b> '
+      +'<span class="mono">(LLM-as-judge · score '+Math.round((v.score||0)*100)/100+')</span> — '
+      +(v.feedback||''); }
+  else { vel.style.display='none'; }
   $('#m-asset').textContent=res.asset_id+' / '+res.run_id;
   $('#m-master').textContent=(m.master&&m.master.sha256)||'';
   $('#m-deriv').textContent=(m.derivative&&m.derivative.sha256)||'';

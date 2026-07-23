@@ -56,13 +56,24 @@ def _resize_to(src: np.ndarray, h: int, w: int) -> np.ndarray:
 
 
 # ---------------------------------------------------------- colorization core
-def colorize_recombine(original_rgb: np.ndarray, ai_rgb: np.ndarray) -> np.ndarray:
-    """Keep ORIGINAL luminance, borrow AI chroma. Output is structurally faithful."""
+def colorize_recombine(original_rgb: np.ndarray, ai_rgb: np.ndarray,
+                       chroma_blur_frac: float = 0.012) -> np.ndarray:
+    """Keep ORIGINAL luminance, borrow AI chroma. Output is structurally faithful.
+
+    Color is low-frequency, so we blur the AI's a/b channels before recombining. This
+    removes high-frequency chroma artifacts — e.g. a 'ghost' silhouette when the model
+    reframes a non-square photo — while the original luminance supplies all real detail.
+    """
     h, w = original_rgb.shape[:2]
     ai = _resize_to(ai_rgb, h, w)
     orig_lab = cv2.cvtColor(original_rgb, cv2.COLOR_RGB2LAB)
     ai_lab = cv2.cvtColor(ai, cv2.COLOR_RGB2LAB)
-    out_lab = np.stack([orig_lab[:, :, 0], ai_lab[:, :, 1], ai_lab[:, :, 2]], axis=-1)
+    a, b = ai_lab[:, :, 1].astype(np.float32), ai_lab[:, :, 2].astype(np.float32)
+    if chroma_blur_frac > 0:
+        k = max(3, int(min(h, w) * chroma_blur_frac)) | 1   # odd kernel
+        a = cv2.GaussianBlur(a, (k, k), 0)
+        b = cv2.GaussianBlur(b, (k, k), 0)
+    out_lab = np.stack([orig_lab[:, :, 0], a.astype(np.uint8), b.astype(np.uint8)], axis=-1)
     return cv2.cvtColor(out_lab, cv2.COLOR_LAB2RGB)
 
 

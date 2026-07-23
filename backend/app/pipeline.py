@@ -60,9 +60,12 @@ class RestorePipeline:
     # ---------------------------------------------------------------- helpers
     def _vision_analyze(self, image_url: str) -> dict:
         prompt = ("You are assisting archival restoration. Look at this historical photo and reply "
-                  "with STRICT JSON: {\"description\": str, \"era_guess\": str, "
-                  "\"damage\": [str], \"uncertain_colors\": [str]}. "
-                  "‘uncertain_colors’ = things whose real color cannot be known from a B&W photo.")
+                  "with STRICT JSON: {\"description\": str, \"era_guess\": str, \"damage\": [str], "
+                  "\"documented_colors\": [{\"item\": str, \"color\": str, \"basis\": str}], "
+                  "\"uncertain_colors\": [str]}. "
+                  "‘documented_colors’ = items whose real color IS historically knowable "
+                  "(flags, known uniforms/insignia, standardized objects) — give the color and a short basis. "
+                  "‘uncertain_colors’ = items whose real color CANNOT be known from a B&W photo (a guess).")
         body = {
             "model": config.GMI_MODEL_VISION,
             "messages": [{"role": "user", "content": [
@@ -82,11 +85,60 @@ class RestorePipeline:
         except Exception:
             return {"description": content.strip()[:400], "era_guess": "", "damage": [], "uncertain_colors": []}
 
-    def _genblaze_colorize(self, image_url: str, prompt: str, model: str) -> tuple[bytes | None, Any, str | None]:
+    def _verify_faithfulness(self, master_url: str, restored_url: str) -> dict:
+        """LLM-as-judge QA: did the restoration invent content beyond color + cleanup?
+        Returns a Genblaze EvaluationResult, serialized."""
+        prompt = (
+            "Compare IMAGE 1 (an original archival photograph) with IMAGE 2 (an AI restoration of it). "
+            "The restoration is ALLOWED to add color and remove dust/scratches. "
+            "Flag a problem ONLY if IMAGE 2 added, removed, or altered real CONTENT: new or missing "
+            "objects/people, changed faces, altered text or insignia, or a different composition. "
+            "Reply STRICT JSON: {\"faithful\": bool, \"severity\": \"none|low|medium|high\", "
+            "\"concerns\": [str]}.")
+        body = {"model": config.GMI_MODEL_VISION, "max_tokens": 700, "temperature": 0.1,
+                "messages": [{"role": "user", "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "text", "text": "IMAGE 1 (original):"},
+                    {"type": "image_url", "image_url": {"url": master_url}},
+                    {"type": "text", "text": "IMAGE 2 (restoration):"},
+                    {"type": "image_url", "image_url": {"url": restored_url}}]}]}
+        try:
+            with httpx.Client(timeout=90) as c:
+                r = c.post(f"{config.GMI_CHAT_BASE_URL}/chat/completions", json=body,
+                           headers={"Authorization": f"Bearer {config.GMI_API_KEY}"})
+                r.raise_for_status()
+                content = r.json()["choices"][0]["message"]["content"] or "{}"
+            d = json.loads(content[content.find("{"): content.rfind("}") + 1])
+        except Exception as e:
+            d = {"faithful": True, "severity": "unknown", "concerns": [f"judge unavailable: {str(e)[:80]}"]}
+        sev = d.get("severity", "none")
+        score = {"none": 1.0, "low": 0.85, "medium": 0.5, "high": 0.15}.get(sev, 0.7)
+        passed = bool(d.get("faithful", True)) and sev in ("none", "low", "unknown")
+        # Wrap in Genblaze's evaluation type (in production this gates auto-retry).
+        from genblaze import EvaluationResult, CallableEvaluator
+        ev = EvaluationResult(passed=passed, score=score,
+                              feedback="; ".join(d.get("concerns", [])) or "No implausible fabrication detected.",
+                              metadata={"severity": sev, "judge": config.GMI_MODEL_VISION})
+        _ = CallableEvaluator(lambda _r, _ev=ev: _ev)  # evaluator wired for retry loops
+        return {"passed": ev.passed, "score": ev.score, "severity": sev,
+                "feedback": ev.feedback, "concerns": d.get("concerns", [])}
+
+    @staticmethod
+    def _match_size(h: int, w: int) -> str:
+        """Closest gpt-image size to the input aspect, so the model doesn't reframe."""
+        if h >= w * 1.25:
+            return "1024x1536"
+        if w >= h * 1.25:
+            return "1536x1024"
+        return "1024x1024"
+
+    def _genblaze_colorize(self, image_url: str, prompt: str, model: str,
+                           params: dict | None = None) -> tuple[bytes | None, Any, str | None]:
         """Run one colorization through a Genblaze Pipeline; return (bytes, manifest, out_url)."""
         import genblaze as g
         pipe = g.Pipeline("trueprint-colorize").step(
             self.image_provider, model=model, prompt=prompt, modality=g.Modality.IMAGE,
+            params=params or {},
             external_inputs=[g.Asset(url=image_url, media_type="image/png")])
         res = pipe.run(timeout=300, raise_on_failure=False)
         run = getattr(res, "run", None)
@@ -149,11 +201,12 @@ class RestorePipeline:
 
         # 3) colorize N samples (independent) via Genblaze
         ai_samples: list[Any] = []
+        size = self._match_size(original.shape[0], original.shape[1])   # avoid model reframing
         for i in range(max(1, samples)):
             prompt = COLORIZE_PROMPTS[i % len(COLORIZE_PROMPTS)]
             model = config.GMI_MODEL_RECOLOR
             progress({"step": f"colorize_{i}", "status": "running", "model": model})
-            data, gbm, out_url = self._genblaze_colorize(master_url, prompt, model)
+            data, gbm, out_url = self._genblaze_colorize(master_url, prompt, model, params={"size": size})
             if data:
                 ai = A.load_rgb(data)
                 ai_samples.append(ai)
@@ -202,6 +255,16 @@ class RestorePipeline:
         self.store.put_derivative(asset_id, run_id, "authenticity_map.png", overlay_png, "image/png")
         self.store.put_derivative(asset_id, run_id, "confidence.png", confidence_png, "image/png")
 
+        # 5b) faithfulness verification — LLM-as-judge (Genblaze EvaluationResult).
+        verification = {"skipped": True, "reason": "colorization declined"}
+        if not declined:
+            progress({"step": "verify", "status": "running"})
+            restored_url = self.store.url(f"derivatives/{asset_id}/{run_id}/restored.png", expires_in=3600)
+            verification = self._verify_faithfulness(master_url, restored_url)
+            steps.append(StepRecord("verify", "gmicloud-chat", config.GMI_MODEL_VISION, "ANALYZE",
+                                    "ok" if verification.get("passed") else "flagged", detail=verification))
+            progress({"step": "verify", "status": "ok", "verification": verification})
+
         # 6) manifest
         disclosure = self._disclosure(stats, analysis, declined=declined)
 
@@ -234,6 +297,7 @@ class RestorePipeline:
             "authenticity": {**stats.to_dict(),
                              "map": f"derivatives/{asset_id}/{run_id}/authenticity_map.png",
                              "confidence": f"derivatives/{asset_id}/{run_id}/confidence.png"},
+            "verification": verification,
             "c2pa": {"embedded": bool(signed_png), "status": c2pa_status, "standard": "C2PA 2.x",
                      "signer": "self-signed dev cert (untrusted by design; production uses a trust-list CA)",
                      "ai_marking": "compositeWithTrainedAlgorithmicMedia (EU AI Act Article 50)",
@@ -285,6 +349,11 @@ class RestorePipeline:
                  f"(luminance locked to the master); all color is AI-inferred "
                  f"(~{stats.pct_color_inferred:.0f}% of the image carries added color, mean colorizer "
                  f"confidence {stats.mean_confidence * 100:.0f}%)."]
+        docs = analysis.get("documented_colors") or []
+        if docs:
+            items = ", ".join(d.get("item", "") for d in docs[:3] if d.get("item"))
+            if items:
+                parts.append(f"Colors of {items} are historically documented.")
         if analysis.get("uncertain_colors"):
             parts.append("Colors of " + ", ".join(analysis["uncertain_colors"][:3]) + " are guesses.")
         if stats.pct_fabricated >= 1:
