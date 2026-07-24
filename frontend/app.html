@@ -7,12 +7,17 @@
 <style>
   :root{
     --bg:#0D1113; --surface:#141A1C; --surface-2:#1A2124; --line:#28312F;
-    --text:#E9ECE9; --muted:#9AA6A3; --faint:#63706D;
+    --text:#E9ECE9; --muted:#9AA6A3; --faint:#63706D; --imgbg:#0a0f10;
     --verify:#33C2B4; --enhanced:#E4B14E; --fabricated:#F06A42; --accent:#33C2B4; --accent-ink:#04100f;
     --font-display: ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
     --font-sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     --font-mono: ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
     --r:14px;
+  }
+  :root[data-theme="light"]{
+    --bg:#EAE7DF; --surface:#F4F2EC; --surface-2:#FBFAF6; --line:#D6D1C4;
+    --text:#181C1D; --muted:#565E5E; --faint:#8A928F; --imgbg:#E4E0D6;
+    --verify:#0F877C; --enhanced:#9A6A10; --fabricated:#C43D19; --accent:#0F877C; --accent-ink:#ffffff;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);line-height:1.55;-webkit-font-smoothing:antialiased}
@@ -46,8 +51,9 @@
   .samples button{padding:0;border:2px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;background:none;aspect-ratio:3/4}
   .samples button[aria-pressed="true"]{border-color:var(--accent)}
   .samples img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(1)}
-  .drop{margin-top:12px;border:1.5px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--muted);font-size:13px;cursor:pointer}
+  .drop{display:block;margin-top:16px;border:1.5px dashed var(--line);border-radius:10px;padding:18px 14px;text-align:center;color:var(--muted);font-size:13px;cursor:pointer;background:var(--surface-2)}
   .drop:hover{border-color:var(--accent);color:var(--text)}
+  .drop b{display:block;color:var(--text);font-size:13.5px;margin-bottom:2px}
 
   /* progress */
   .steps{display:flex;flex-direction:column;gap:9px}
@@ -60,9 +66,14 @@
   .stp .m{font-family:var(--font-mono);font-size:11px;color:var(--faint);margin-left:auto}
   @keyframes pulse{50%{opacity:.4}}
 
+  /* result: viewer beside provenance (no more long scroll) */
+  .result-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
+  @media (max-width:980px){.result-grid{grid-template-columns:1fr}}
+  .result-right{position:sticky;top:76px}
+  @media (max-width:980px){.result-right{position:static}}
   /* viewer */
-  .viewer{position:relative;background:#0a0f10;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-height:320px;display:grid;place-items:center}
-  .viewer img{width:100%;display:block}
+  .viewer{position:relative;background:var(--imgbg);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:grid;place-items:center}
+  .viewer img{max-width:100%;max-height:74vh;width:auto;display:block;object-fit:contain}
   .modes{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:100px;padding:3px;margin-bottom:12px}
   .modes button{font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;border:0;background:transparent;color:var(--muted);padding:7px 12px;border-radius:100px;cursor:pointer}
   .modes button[aria-pressed="true"]{background:var(--surface-2);color:var(--text)}
@@ -90,7 +101,9 @@
   .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
   .cat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:.15s;display:flex;flex-direction:column}
   .cat:hover{border-color:var(--accent);transform:translateY(-2px)}
-  .cat .thumb{aspect-ratio:4/5;background:#0a0f10;overflow:hidden}
+  .cat .thumb{aspect-ratio:4/5;background:var(--imgbg);overflow:hidden}
+  .theme-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+  .theme-btn:hover{border-color:var(--accent);color:var(--accent)}
   .cat .thumb img{width:100%;height:100%;object-fit:cover;display:block}
   .cat .body{padding:12px;display:flex;flex-direction:column;gap:7px}
   .cat .fn{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -100,6 +113,7 @@
   .cat .chip.warn{color:var(--fabricated);border-color:color-mix(in srgb,var(--fabricated) 40%,var(--line))}
   .cat .hash{font-family:var(--font-mono);font-size:10px;color:var(--faint)}
 </style>
+<script>(function(){try{var k='tp-theme',s=localStorage.getItem(k);var l=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches;document.documentElement.setAttribute('data-theme',s||(l?'light':'dark'));}catch(e){}})();</script>
 </head>
 <body>
 <header><div class="wrap nav">
@@ -110,6 +124,7 @@
     <button role="tab" aria-selected="false" data-tab="collection">Collection</button>
     <button role="tab" aria-selected="false" data-tab="verify">Verify</button>
   </div>
+  <button class="theme-btn" id="theme-toggle" aria-label="Toggle light/dark" title="Toggle light/dark">◑</button>
   <a class="btn btn-ghost small" href="/">Home</a>
 </div></header>
 
@@ -125,7 +140,7 @@
       <div class="card">
         <h3>1 · Choose a photo</h3>
         <div class="samples" id="samples"></div>
-        <label class="drop" for="file">or drop / choose your own image
+        <label class="drop" for="file"><b>Upload your own photo</b>drag &amp; drop, or click to choose
           <input id="file" type="file" accept="image/*" class="hidden"></label>
         <p class="small muted" id="chosen" style="margin-top:8px"></p>
         <button class="btn btn-primary" id="run" style="width:100%;justify-content:center;margin-top:14px" disabled>Restore</button>
@@ -145,6 +160,7 @@
 
         <!-- result -->
         <div id="result" class="hidden">
+        <div class="result-grid"><div class="result-left">
           <div class="modes" id="modes">
             <button data-mode="restored" aria-pressed="true">Restored</button>
             <button data-mode="master" aria-pressed="false">Original</button>
@@ -158,8 +174,8 @@
             <span><span class="d" style="background:var(--enhanced)"></span>Enhanced</span>
             <span><span class="d" style="background:var(--fabricated)"></span>Fabricated / AI guessing</span>
           </div>
-
-          <div class="card" style="margin-top:16px">
+          </div>
+          <div class="card result-right">
             <h3>Provenance &amp; authenticity</h3>
             <div class="stat-row">
               <div class="stat org"><div class="v" id="s-org">–</div><div class="k">Structure kept</div></div>
@@ -186,6 +202,7 @@
               <a class="btn btn-ghost small" href="https://contentcredentials.org/verify" target="_blank">Verify at Content Credentials ↗</a>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>
@@ -220,6 +237,13 @@
 
 <script>
 const $ = s => document.querySelector(s);
+// ---- theme toggle ----
+(function(){ const b=$('#theme-toggle'); if(!b) return;
+  const ico=()=>{ b.textContent = document.documentElement.getAttribute('data-theme')==='light' ? '☀' : '☾'; };
+  ico();
+  b.onclick=()=>{ const n = document.documentElement.getAttribute('data-theme')==='light' ? 'dark':'light';
+    document.documentElement.setAttribute('data-theme', n); try{localStorage.setItem('tp-theme', n);}catch(e){} ico(); };
+})();
 const STEP_LABELS = {ingest:"Ingest master → B2 (Object Lock)", repair:"Repair damage (OpenCV inpaint)",
   analyze:"Analyze damage (Gemini)", colorize_0:"Colorize · sample 1 (Genblaze)",
   colorize_1:"Colorize · sample 2 (Genblaze)", authenticity:"Authenticity map + confidence",
@@ -294,6 +318,7 @@ function stepRow(key){let r=document.querySelector(`.stp[data-key="${key}"]`);
 
 $('#run').onclick=async()=>{
   $('#run').disabled=true; $('#result').classList.add('hidden'); $('#steps').innerHTML=''; $('#run-err').textContent='';
+  $('#progress').style.display='';   // show pipeline while running
   const fastUI=$('#fastmode').checked;
   Object.keys(STEP_LABELS).forEach(k=>{ if(fastUI && k==='colorize_1') return; stepRow(k); });
   // instant path: cached sample (unless "run live" is checked)
@@ -322,7 +347,7 @@ $('#run').onclick=async()=>{
 
 // ---- render result ----
 let RES=null;
-function renderResult(res){ RES=res; $('#result').classList.remove('hidden');
+function renderResult(res){ RES=res; $('#result').classList.remove('hidden'); $('#progress').style.display='none';
   setMode('restored');
   const s=res.stats||{};
   $('#s-org').textContent=(s.pct_original??'–')+'%'; $('#s-color').textContent=(s.pct_color_inferred??'–')+'%';
