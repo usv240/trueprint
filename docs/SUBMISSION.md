@@ -22,16 +22,16 @@ B2 is the **system of record**, not a blob store:
 
 ## How it uses Genblaze
 - Every restoration runs through the Genblaze **`Pipeline`** (steps, inputs, provider abstraction) with `S3StorageBackend.for_backblaze(...)`, `ObjectStorageSink`, and `ObjectLockConfig`.
-- We wrote a **custom provider** (`TrueprintImageProvider`, subclassing `GMICloudImageProvider`) that emits the correct request-queue payload for the image model while keeping Genblaze's Pipeline / **Manifest** / lineage machinery.
-- **Multi-sample corroboration:** independent colorizations are compared to quantify per-pixel confidence.
+- We wrote **two custom Genblaze providers**: `TrueprintImageProvider` (GMI request-queue payloads) and `GeminiImageProvider` (a `SyncProvider` wrapping Google's Gemini image API) — so **both** colorizers run through Genblaze's Pipeline / **Manifest** / lineage machinery.
+- **Multi-provider corroboration:** two independent providers (Google Gemini + OpenAI gpt-image) colorize each photo; their per-pixel disagreement is the confidence map.
 - Genblaze **provenance manifests** from each run are folded into Trueprint's own hash-verified manifest and archived on B2.
 
 ## Providers & models used
-- **GMI Cloud — `google/gemini-3.6-flash`** (multimodal): damage/scene analysis + uncertain-color detection, via the OpenAI-compatible chat API.
-- **GMI Cloud — `gpt-image-2-edit`** (instruction image-to-image): colorization, run twice per image for the confidence map, via the request queue.
-- Evaluated and configurable in `.env`: `bria-fibo-restore`, `hunyuan-image-to-image`.
+- **GMI Cloud — `google/gemini-3.6-flash`** (multimodal): damage/scene analysis, uncertain-color detection, and the LLM-as-judge faithfulness check, via the OpenAI-compatible chat API.
+- **Google — `gemini-3.1-flash-image`** (image-to-image): **primary colorizer** (aspect-preserving, reliable); drives the final restoration.
+- **GMI Cloud — `gpt-image-2-edit`** (instruction image-to-image): **independent second colorizer** (OpenAI family) for genuine multi-provider confidence.
 - **Backblaze B2** (S3-compatible): storage / provenance / system of record.
-- Authenticity engine: OpenCV + NumPy (LAB luminance-lock, multi-sample confidence, region classification).
+- **C2PA** (`c2pa-python`): signed Content Credentials. Authenticity engine: OpenCV + NumPy (LAB luminance-lock, multi-provider confidence, region classification).
 
 ## How we built it
 FastAPI backend (upload, **live SSE progress**, result, verify) serving a vanilla-JS app + landing page; Genblaze + `genblaze-gmicloud` + `genblaze-s3` for orchestration and B2; an OpenCV/NumPy authenticity engine. Restorations run in a background thread and stream progress to the browser.

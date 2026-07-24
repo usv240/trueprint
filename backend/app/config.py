@@ -45,6 +45,10 @@ class Config:
     GMI_MODEL_UPSCALE = _get("GMI_MODEL_UPSCALE")
     GMI_MODEL_AUDIO = _get("GMI_MODEL_AUDIO")
 
+    # --- Google (Gemini image — independent 2nd colorizer for true multi-provider) ---
+    GOOGLE_API_KEY = _get("GOOGLE_API_KEY")
+    GOOGLE_MODEL_IMAGE = _get("GOOGLE_MODEL_IMAGE", "gemini-3.1-flash-image")
+
     def require_b2(self) -> None:
         missing = [k for k in ("B2_KEY_ID", "B2_APP_KEY", "B2_S3_ENDPOINT", "B2_REGION")
                    if not getattr(self, k)]

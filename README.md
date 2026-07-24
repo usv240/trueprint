@@ -27,7 +27,7 @@ Built for the **Backblaze Generative Media Hackathon** on **Backblaze B2 + Genbl
 
 - **Orchestration** of each restoration through the Genblaze `Pipeline` (steps, inputs, provider abstraction).
 - A **custom provider** (`TrueprintImageProvider`, subclassing `GMICloudImageProvider`) emits the request-queue payload the image model expects — keeping all of Genblaze's Pipeline / manifest / lineage machinery.
-- **Multi-sample corroboration** — independent colorizations are compared to quantify per-pixel confidence.
+- **Multi-provider corroboration** — colorization runs across two independent providers (Google Gemini + OpenAI gpt-image), both orchestrated via Genblaze; their per-pixel disagreement is the confidence heatmap. Gemini (aspect-preserving, reliable) drives the final image.
 - **LLM-as-judge verification** — a `CallableEvaluator` producing a Genblaze `EvaluationResult` compares the restoration to the master and flags historically-implausible fabrication (this caught, and drove the fix for, a real ghosting artifact during development).
 - **Provenance manifests** from each run are folded into Trueprint's manifest, hash-verified, and archived on B2.
 
@@ -35,11 +35,12 @@ Built for the **Backblaze Generative Media Hackathon** on **Backblaze B2 + Genbl
 
 | Role | Provider | Model | Notes |
 |---|---|---|---|
-| Vision analysis + uncertain-color detection | GMI Cloud | `google/gemini-3.6-flash` | multimodal, via OpenAI-compatible chat API |
-| Colorization (×2 independent samples) | GMI Cloud | `gpt-image-2-edit` | instruction image-to-image, via the request queue |
+| Vision analysis + uncertain-color detection + LLM-judge | GMI Cloud | `google/gemini-3.6-flash` | multimodal, OpenAI-compatible chat API |
+| **Colorization — primary** (drives the final) | **Google** | `gemini-3.1-flash-image` | image-to-image, aspect-preserving, reliable |
+| **Colorization — 2nd provider** (confidence) | GMI Cloud | `gpt-image-2-edit` | independent second opinion (OpenAI family) |
 | Storage / system of record | Backblaze B2 (S3) | — | masters + derivatives + manifests + catalog |
 
-_Colorization is luminance-locked in the authenticity engine (OpenCV/NumPy) so the AI supplies color only; the original structure is preserved. Other GMI models were evaluated — `bria-fibo-restore` (restore), `hunyuan-image-to-image` (i2i) — and are configurable in `.env`; `gpt-image-2-edit` gave the most faithful colorization. It declines photos containing minors (provider policy); Trueprint records such refusals in provenance and degrades gracefully._
+_Colorization is luminance-locked in the authenticity engine (OpenCV/NumPy) so the AI supplies color only; the original structure is preserved. Two independent providers colorize each photo — **Google Gemini** (primary; aspect-preserving) and **OpenAI gpt-image** (via GMI) — and their disagreement forms the confidence map. `gpt-image-2-edit` declines photos containing minors (provider policy); Trueprint records such refusals in provenance and degrades gracefully. When only one provider is configured, the pipeline falls back to two independent samples of it._
 
 ## Setup
 

@@ -52,10 +52,13 @@ class StepRecord:
 class RestorePipeline:
     def __init__(self) -> None:
         config.require_b2(); config.require_gmi()
-        from .providers import TrueprintImageProvider
+        from .providers import TrueprintImageProvider, GeminiImageProvider
         self.store = B2Store()
         self.image_provider = TrueprintImageProvider(
             api_key=config.GMI_API_KEY, base_url=config.GMI_IMAGE_BASE_URL)
+        # optional independent 2nd colorizer (Google) → genuine multi-provider confidence
+        self.gemini_provider = (GeminiImageProvider(api_key=config.GOOGLE_API_KEY)
+                                if config.GOOGLE_API_KEY else None)
 
     # ---------------------------------------------------------------- helpers
     def _vision_analyze(self, image_url: str) -> dict:
@@ -132,24 +135,40 @@ class RestorePipeline:
             return "1536x1024"
         return "1024x1024"
 
+    @staticmethod
+    def _read_asset(url: str) -> bytes:
+        """Read a Genblaze output asset — http(s) URL or a local file:// URL."""
+        if url.startswith("file:"):
+            import os
+            from urllib.parse import urlparse, unquote
+            path = unquote(urlparse(url).path)
+            if os.name == "nt" and path.startswith("/"):
+                path = path[1:]
+            with open(path, "rb") as f:
+                return f.read()
+        return httpx.get(url, timeout=90).content
+
     def _genblaze_colorize(self, image_url: str, prompt: str, model: str,
-                           params: dict | None = None) -> tuple[bytes | None, Any, str | None]:
-        """Run one colorization through a Genblaze Pipeline; return (bytes, manifest, out_url)."""
+                           params: dict | None = None, provider: Any = None
+                           ) -> tuple[bytes | None, Any, str | None]:
+        """Run one colorization through a Genblaze Pipeline on the given provider."""
         import genblaze as g
-        pipe = g.Pipeline("trueprint-colorize").step(
-            self.image_provider, model=model, prompt=prompt, modality=g.Modality.IMAGE,
-            params=params or {},
-            external_inputs=[g.Asset(url=image_url, media_type="image/png")])
-        res = pipe.run(timeout=300, raise_on_failure=False)
-        run = getattr(res, "run", None)
-        for s in (getattr(run, "steps", []) or []):
-            if str(getattr(s, "status", "")).endswith("succeeded"):
-                for a in (getattr(s, "assets", []) or []):
-                    url = getattr(a, "url", None)
-                    if url:
-                        data = httpx.get(url, timeout=90).content
-                        return data, getattr(res, "manifest", None), url
-        return None, getattr(res, "manifest", None), None
+        last_manifest = None
+        for _attempt in range(2):   # tolerate a transient provider timeout
+            pipe = g.Pipeline("trueprint-colorize").step(
+                provider or self.image_provider, model=model, prompt=prompt, modality=g.Modality.IMAGE,
+                params=params or {},
+                external_inputs=[g.Asset(url=image_url, media_type="image/png")])
+            res = pipe.run(timeout=300, raise_on_failure=False)
+            last_manifest = getattr(res, "manifest", None)
+            run = getattr(res, "run", None)
+            for s in (getattr(run, "steps", []) or []):
+                if str(getattr(s, "status", "")).endswith("succeeded"):
+                    for a in (getattr(s, "assets", []) or []):
+                        url = getattr(a, "url", None)
+                        if url:
+                            return self._read_asset(url), last_manifest, url
+        return None, last_manifest, None
 
     # ------------------------------------------------------------------- run
     def run(self, image_bytes: bytes, filename: str, *, progress: Progress = _noop,
@@ -199,14 +218,28 @@ class RestorePipeline:
                                     "ANALYZE", "skipped", detail={"error": str(e)[:200]}))
         progress({"step": "analyze", "status": "ok", "analysis": analysis})
 
-        # 3) colorize N samples (independent) via Genblaze
-        ai_samples: list[Any] = []
+        # 3) colorize across INDEPENDENT providers via Genblaze (true multi-provider
+        #    corroboration): GMI gpt-image (OpenAI family) + Google Gemini image.
         size = self._match_size(original.shape[0], original.shape[1])   # avoid model reframing
-        for i in range(max(1, samples)):
-            prompt = COLORIZE_PROMPTS[i % len(COLORIZE_PROMPTS)]
-            model = config.GMI_MODEL_RECOLOR
-            progress({"step": f"colorize_{i}", "status": "running", "model": model})
-            data, gbm, out_url = self._genblaze_colorize(master_url, prompt, model, params={"size": size})
+        gmi = {"provider": self.image_provider, "pname": "gmicloud-image",
+               "model": config.GMI_MODEL_RECOLOR, "prompt": COLORIZE_PROMPTS[1], "params": {"size": size}}
+        if self.gemini_provider:
+            # Gemini is aspect-preserving + reliable -> primary (drives the final image);
+            # GMI (OpenAI family) is the independent second opinion for the confidence map.
+            colorizers = [{"provider": self.gemini_provider, "pname": "google-gemini-image",
+                           "model": config.GOOGLE_MODEL_IMAGE, "prompt": COLORIZE_PROMPTS[0],
+                           "params": {}}, gmi]
+        else:  # single provider available -> two independent samples of it
+            colorizers = [{"provider": self.image_provider, "pname": "gmicloud-image",
+                           "model": config.GMI_MODEL_RECOLOR, "prompt": COLORIZE_PROMPTS[0],
+                           "params": {"size": size}}, gmi]
+        colorizers = colorizers[:max(1, samples)]
+
+        ai_samples: list[Any] = []
+        for i, cz in enumerate(colorizers):
+            progress({"step": f"colorize_{i}", "status": "running", "model": cz["model"]})
+            data, gbm, out_url = self._genblaze_colorize(master_url, cz["prompt"], cz["model"],
+                                                         params=cz["params"], provider=cz["provider"])
             if data:
                 ai = A.load_rgb(data)
                 ai_samples.append(ai)
@@ -214,14 +247,15 @@ class RestorePipeline:
                     gb_manifests.append(gbm)
                 self.store.put_step_artifact(asset_id, run_id, f"colorize_{i}", "raw.png",
                                              A.to_png(ai), "image/png")
-                steps.append(StepRecord(f"colorize_{i}", "gmicloud-image", model, "FABRICATED", "ok",
+                steps.append(StepRecord(f"colorize_{i}", cz["pname"], cz["model"], "FABRICATED", "ok",
                                         input_sha256=master.sha256, output_sha256=sha256_hex(data),
-                                        detail={"prompt": prompt, "output_url": out_url}))
-                progress({"step": f"colorize_{i}", "status": "ok"})
+                                        detail={"prompt": cz["prompt"], "output_url": out_url}))
+                progress({"step": f"colorize_{i}", "status": "ok", "model": cz["model"]})
             else:
-                steps.append(StepRecord(f"colorize_{i}", "gmicloud-image", model, "FABRICATED", "failed",
-                                        detail={"prompt": prompt}))
+                steps.append(StepRecord(f"colorize_{i}", cz["pname"], cz["model"], "FABRICATED", "failed",
+                                        detail={"prompt": cz["prompt"]}))
                 progress({"step": f"colorize_{i}", "status": "failed"})
+        multi_provider = self.gemini_provider is not None and len(ai_samples) >= 2
 
         declined = not ai_samples  # every colorizer refused (e.g. content policy)
 
@@ -305,8 +339,11 @@ class RestorePipeline:
             "analysis": analysis,
             "disclosure_statement": disclosure,
             "genblaze_runs": [self._gb_manifest_summary(m) for m in gb_manifests],
-            "providers": {"vision": config.GMI_MODEL_VISION, "colorize": config.GMI_MODEL_RECOLOR,
-                          "storage": "backblaze-b2"},
+            "providers": {"vision": config.GMI_MODEL_VISION,
+                          "colorize": config.GMI_MODEL_RECOLOR,
+                          "colorize_2": (config.GOOGLE_MODEL_IMAGE if self.gemini_provider
+                                         else config.GMI_MODEL_RECOLOR),
+                          "multi_provider": multi_provider, "storage": "backblaze-b2"},
         }
         manifest["manifest_sha256"] = sha256_hex(
             json.dumps(manifest, sort_keys=True, default=str).encode())

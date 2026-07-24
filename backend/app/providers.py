@@ -7,7 +7,9 @@ model expects, while keeping all of Genblaze's Pipeline / manifest / lineage /
 retry machinery.
 """
 from __future__ import annotations
+import base64, os, tempfile
 from typing import Any
+import httpx
 from genblaze_gmicloud import GMICloudImageProvider
 from genblaze_core.models.step import Step
 
@@ -59,3 +61,67 @@ class TrueprintImageProvider(GMICloudImageProvider):
         for k, v in (getattr(step, "params", None) or {}).items():
             payload[k] = v
         return payload
+
+
+class GeminiImageProvider:
+    """A real Genblaze provider (SyncProvider) for Google Gemini image-to-image.
+
+    Lets Trueprint run its second, independent colorization through Genblaze on a
+    *different provider family* (Google) than gpt-image (OpenAI/GMI) — so the
+    confidence map is genuine multi-provider corroboration. Implemented lazily as a
+    subclass so importing this module never requires genblaze at load time.
+    """
+
+    _impl = None
+
+    def __new__(cls, api_key: str, *, http_timeout: float = 180.0):
+        from genblaze import SyncProvider
+        from genblaze_core.exceptions import ProviderError
+        from genblaze_core.models.asset import Asset
+        from genblaze_core._utils import local_file_url
+
+        class _GeminiImageProvider(SyncProvider):
+            name = "google-gemini-image"
+
+            def __init__(self, key: str, timeout: float):
+                super().__init__()
+                self._key, self._timeout = key, timeout
+
+            def generate(self, step: Step, config=None) -> Step:
+                url = _first_input_url(step)
+                if not url:
+                    raise ProviderError("GeminiImageProvider: no input image on step")
+                img = httpx.get(url, timeout=self._timeout).content
+                mime = "image/png" if img[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+                b64 = base64.b64encode(img).decode()
+                ep = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+                      f"{step.model}:generateContent?key={self._key}")
+                body = {"contents": [{"parts": [
+                    {"text": step.prompt or "Colorize this photograph with natural colors."},
+                    {"inline_data": {"mime_type": mime, "data": b64}}]}],
+                    "generationConfig": {"responseModalities": ["IMAGE"]}}
+                # "Thinking" image models occasionally return a thought-only response
+                # with no image — retry a few times before giving up.
+                out, last = None, ""
+                for _ in range(3):
+                    r = httpx.post(ep, json=body, timeout=self._timeout)
+                    if r.status_code >= 300:
+                        last = f"HTTP {r.status_code}: {r.text[:140]}"; continue
+                    parts = (r.json().get("candidates", [{}])[0].get("content", {}) or {}).get("parts", [])
+                    for p in parts:
+                        idata = p.get("inline_data") or p.get("inlineData")
+                        if idata and idata.get("data"):
+                            out = base64.b64decode(idata["data"]); break
+                    if out:
+                        break
+                    last = "no image part (thought-only response)"
+                if not out:
+                    raise ProviderError(f"Gemini returned no image after retries ({last})")
+                from pathlib import Path
+                fd, tmp = tempfile.mkstemp(suffix=".png"); os.close(fd)
+                with open(tmp, "wb") as f:
+                    f.write(out)
+                step.assets.append(Asset(url=local_file_url(Path(tmp).resolve()), media_type="image/png"))
+                return step
+
+        return _GeminiImageProvider(api_key, http_timeout)
