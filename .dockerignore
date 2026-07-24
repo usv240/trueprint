@@ -1,0 +1,17 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+backend/certs
+assets/_test_out
+tests
+scripts
+docs
+landing
+PLAN.md
+SOURCES.md
+Rules.md
+*.md
+.vscode

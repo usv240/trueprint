@@ -1,0 +1,48 @@
+# Render.com blueprint — one web service that serves everything.
+# Deploy: push repo, then "New +" -> "Blueprint" -> pick this repo. Set the
+# secret env vars (sync:false) in the dashboard. Or use Railway with the Dockerfile.
+services:
+  - type: web
+    name: trueprint
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter          # 512MB is fine; bump if OpenCV memory is tight
+    healthCheckPath: /api/health
+    envVars:
+      # --- secrets: set these in the Render dashboard ---
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APP_KEY
+        sync: false
+      - key: GMI_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      # --- non-secret config ---
+      - key: B2_BUCKET
+        value: trueprint
+      - key: B2_S3_ENDPOINT
+        value: s3.us-east-005.backblazeb2.com
+      - key: B2_REGION
+        value: us-east-005
+      - key: GMI_CHAT_BASE_URL
+        value: https://api.gmi-serving.com/v1
+      - key: GMI_IMAGE_BASE_URL
+        value: https://console.gmicloud.ai/api/v1/ie/requestqueue/apikey
+      - key: GMI_MODEL_VISION
+        value: google/gemini-3.6-flash
+      - key: GMI_MODEL_RECOLOR
+        value: gpt-image-2-edit
+      - key: GOOGLE_MODEL_IMAGE
+        value: gemini-3.1-flash-image
+      # --- cost/abuse guards (tune as needed) ---
+      - key: TP_RATE_PER_IP_HOUR
+        value: "6"
+      - key: TP_MAX_CONCURRENT
+        value: "3"
+      - key: TP_DAILY_CAP
+        value: "150"
+      - key: TP_MAX_UPLOAD_MB
+        value: "12"
+      - key: B2_MASTER_LOCK_MODE
+        value: COMPLIANCE
