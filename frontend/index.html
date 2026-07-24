@@ -1,4 +1,4 @@
-<title>Trueprint — Provenance-first restoration for the world's archives</title>
+<title>Trueprint, Provenance-first restoration for the world's archives</title>
 
 <style>
   /* ============================ TOKENS ============================ */
@@ -209,7 +209,7 @@
 
   .feature-list{display:flex; flex-direction:column; gap:14px}
   .feature-list .fl{display:flex; gap:13px; align-items:flex-start}
-  .feature-list .fl .mk{flex:0 0 auto; width:26px; height:26px; border-radius:7px; display:grid; place-items:center; background:color-mix(in srgb,var(--accent) 16%, transparent); color:var(--accent); font-family:var(--font-mono); font-weight:700; font-size:13px; margin-top:2px}
+  .feature-list .fl .mk{flex:0 0 auto; width:9px; height:9px; border-radius:3px; background:var(--accent); margin-top:9px}
   .feature-list .fl h3{font-size:16px; font-weight:650; margin-bottom:2px}
   .feature-list .fl p{color:var(--muted); font-size:14.5px}
 
@@ -268,7 +268,7 @@
     </nav>
     <div class="spacer"></div>
     <span class="act">
-      <a class="btn btn-primary" href="/app">Try the demo <span class="arrow">→</span></a>
+      <a class="btn btn-primary" href="/app">Try the demo <span class="arrow"> to </span></a>
       <button class="info" aria-label="What does Try the demo do?">i</button>
       <span class="pop" role="tooltip"><span class="k">Try the demo</span>Opens the live app: upload a damaged photo, watch the Genblaze pipeline restore it across multiple AI providers, then reveal the authenticity map showing what's real vs. invented.</span>
     </span>
@@ -283,23 +283,23 @@
       <div>
         <span class="eyebrow">Provenance-first restoration · Backblaze B2 + Genblaze</span>
         <h1>AI restoration invents history. Trueprint proves what's&nbsp;<em>real</em>.</h1>
-        <p class="lede">Restore old photos and audio like the best AI tools — then get a cryptographically verifiable record of exactly which pixels are original, which are enhanced, and which the AI fabricated.</p>
+        <p class="lede">Restore old photos and audio like the best AI tools, then get a cryptographically verifiable record of exactly which pixels are original, which are enhanced, and which the AI fabricated.</p>
 
         <div class="hero-cta">
           <span class="act">
-            <a class="btn btn-primary" href="/app">Try the demo <span class="arrow">→</span></a>
+            <a class="btn btn-primary" href="/app">Try the demo <span class="arrow"> to </span></a>
             <button class="info" aria-label="What does Try the demo do?">i</button>
-            <span class="pop" role="tooltip"><span class="k">Try the demo</span>Upload a damaged photo and watch the restoration pipeline run live, step by step, across multiple providers — ending with the authenticity map and a downloadable provenance record.</span>
+            <span class="pop" role="tooltip"><span class="k">Try the demo</span>Upload a damaged photo and watch the restoration pipeline run live, step by step, across multiple providers, ending with the authenticity map and a downloadable provenance record.</span>
           </span>
           <span class="act">
             <a class="btn btn-ghost" href="/verify">Verify a file</a>
             <button class="info" aria-label="What does Verify a file do?">i</button>
-            <span class="pop" role="tooltip"><span class="k">Verify a file</span>Drop in any Trueprint image — even one downloaded elsewhere — to read its embedded provenance manifest and re-check its hash against the archive. Detects any tampering.</span>
+            <span class="pop" role="tooltip"><span class="k">Verify a file</span>Drop in any Trueprint image, even one downloaded elsewhere, to read its embedded provenance manifest and re-check its hash against the archive. Detects any tampering.</span>
           </span>
           <span class="act">
             <a class="btn btn-ghost" href="/app">Watch 3-min demo</a>
             <button class="info" aria-label="What does Watch demo do?">i</button>
-            <span class="pop" role="tooltip"><span class="k">Watch the demo</span>A three-minute walkthrough: problem → live restoration → the authenticity reveal → provenance on Backblaze B2 → tamper verification.</span>
+            <span class="pop" role="tooltip"><span class="k">Watch the demo</span>A three-minute walkthrough: problem to live restoration to the authenticity reveal to provenance on Backblaze B2 to tamper verification.</span>
           </span>
         </div>
 
@@ -322,7 +322,7 @@
           </div>
           <span class="act">
             <button class="info" aria-label="What do these modes show?">i</button>
-            <span class="pop" role="tooltip"><span class="k">Three views</span><b>Damaged</b>: the original degraded scan. <b>Restored</b>: the AI-restored result. <b>Authenticity</b>: the same result with a heatmap revealing what was invented — teal = original, amber = enhanced, vermilion = AI-fabricated.</span>
+            <span class="pop" role="tooltip"><span class="k">Three views</span><b>Damaged</b>: the original degraded scan. <b>Restored</b>: the AI-restored result. <b>Authenticity</b>: the same result with a heatmap revealing what was invented, teal = original, amber = enhanced, vermilion = AI-fabricated.</span>
           </span>
         </div>
 
@@ -372,16 +372,16 @@
 
             <!-- authenticity overlay -->
             <g class="layer l-auth">
-              <g class="region"><title>Face — AI-reconstructed from a face prior · high fabrication</title>
+              <g class="region"><title>Face, AI-reconstructed from a face prior · high fabrication</title>
                 <ellipse class="rfill" cx="200" cy="205" rx="72" ry="86" fill="var(--fabricated)" opacity=".42"/>
                 <ellipse cx="200" cy="205" rx="72" ry="86" fill="none" stroke="var(--fabricated)" stroke-width="1.5"/>
               </g>
-              <g class="region"><title>Background & clothing color — all chroma is AI-inferred · two colorizers disagreed here</title>
+              <g class="region"><title>Background & clothing color, all chroma is AI-inferred · two colorizers disagreed here</title>
                 <path class="rfill" d="M0 0 H400 V500 H0 Z M128 119 A72 86 0 0 0 272 119 M120 500 V405 C120 350 165 320 200 320 C235 320 280 350 280 405 V500" fill="var(--fabricated)" opacity=".16" fill-rule="evenodd"/>
                 <rect class="rfill" x="120" y="330" width="160" height="170" fill="var(--enhanced)" opacity=".30"/>
                 <rect x="120" y="330" width="160" height="170" fill="none" stroke="var(--enhanced)" stroke-width="1.3"/>
               </g>
-              <g class="region"><title>Eyes & mouth — original detail preserved from the master · verified</title>
+              <g class="region"><title>Eyes & mouth, original detail preserved from the master · verified</title>
                 <rect class="rfill" x="160" y="192" width="80" height="72" fill="var(--verify)" opacity=".30"/>
                 <rect x="160" y="192" width="80" height="72" fill="none" stroke="var(--verify)" stroke-width="1.3"/>
               </g>
@@ -412,7 +412,7 @@
   <!-- ===================== QUOTE ===================== -->
   <div class="quotebar">
     <div class="wrap">
-      <p class="q">A 2026 Library of Congress call-to-action urges libraries, archives, and museums to keep AI-affected collections authentic, transparent, and verifiable — from creation through access. Trueprint is built for exactly that.</p>
+      <p class="q">A 2026 Library of Congress call-to-action urges libraries, archives, and museums to keep AI-affected collections authentic, transparent, and verifiable, from creation through access. Trueprint is built for exactly that.</p>
       <cite>Paraphrased from “Content Authenticity &amp; Provenance in the Age of AI: A Call-to-Action for the LAMs Community,” The Signal, Library of Congress, 2026 · <a href="https://blogs.loc.gov/thesignal/2026/04/content-authenticity-and-provenance-in-the-age-of-artificial-intelligence-a-call-to-action-for-the-libraries-archives-and-museums-community/" style="color:var(--accent)">source</a></cite>
     </div>
   </div>
@@ -422,14 +422,14 @@
     <div class="wrap">
       <div class="sec-head">
         <span class="eyebrow">The problem</span>
-        <h2>Restoration doesn't recover the past. It guesses it — silently.</h2>
-        <p>When an AI colorizes a 1920s photograph, it isn't recovering the true color of a dress or a storefront sign. It's inventing a beautiful, plausible fiction. The moment that version circulates, the historical record is quietly corrupted — and no one can tell which parts were real.</p>
+        <h2>Restoration doesn't recover the past. It guesses it, silently.</h2>
+        <p>When an AI colorizes a 1920s photograph, it isn't recovering the true color of a dress or a storefront sign. It's inventing a beautiful, plausible fiction. The moment that version circulates, the historical record is quietly corrupted, and no one can tell which parts were real.</p>
       </div>
       <div class="grid g3">
         <div class="card">
           <span class="tag" style="color:var(--fabricated)">Invented, not recovered</span>
           <h3>Colorization is a guess</h3>
-          <p>A black-and-white master contains no color data. Every hue an AI adds is inferred from what "looks right" — not from the original scene.</p>
+          <p>A black-and-white master contains no color data. Every hue an AI adds is inferred from what "looks right", not from the original scene.</p>
         </div>
         <div class="card">
           <span class="tag" style="color:var(--fabricated)">Detail from nowhere</span>
@@ -459,17 +459,17 @@
         <div class="card cls" data-c="original">
           <span class="tag">Original</span>
           <h3>Real signal, preserved</h3>
-          <p>Pixels carried through from the master untouched, within tolerance. This is genuine historical data — the part you can cite without an asterisk.</p>
+          <p>Pixels carried through from the master untouched, within tolerance. This is genuine historical data, the part you can cite without an asterisk.</p>
         </div>
         <div class="card cls" data-c="enhanced">
           <span class="tag">Enhanced</span>
           <h3>Real signal, cleaned</h3>
-          <p>Original data that was denoised, de-scratched, or contrast-corrected. Nothing invented — the underlying signal is real, just clarified.</p>
+          <p>Original data that was denoised, de-scratched, or contrast-corrected. Nothing invented, the underlying signal is real, just clarified.</p>
         </div>
         <div class="card cls" data-c="fabricated">
           <span class="tag">Fabricated</span>
           <h3>Invented by AI</h3>
-          <p>Content with no basis in the master: inpainted damage, all colorized chroma, hallucinated detail, reconstructed faces. Beautiful — but a guess.</p>
+          <p>Content with no basis in the master: inpainted damage, all colorized chroma, hallucinated detail, reconstructed faces. Beautiful, but a guess.</p>
         </div>
       </div>
     </div>
@@ -483,21 +483,21 @@
       <div class="sec-head">
         <span class="eyebrow">How it works · the pipeline</span>
         <h2>One orchestrated pipeline, many specialist models.</h2>
-        <p>Genblaze chains best-in-class providers into a single restoration run. Each step declares fallback models, so a provider outage degrades gracefully instead of failing — and every step is recorded in a hash-verified lineage.</p>
+        <p>Genblaze chains best-in-class providers into a single restoration run. Each step declares fallback models, so a provider outage degrades gracefully instead of failing, and every step is recorded in a hash-verified lineage.</p>
       </div>
       <div class="pipe">
         <div class="step"><span class="n">STEP 01</span><h3>Analyze &amp; detect damage</h3><p>A vision model reads the scan: describes the scene, finds scratches, tears and holes, and emits a damage mask that drives the repair.</p><span class="modal">Vision LLM</span></div>
-        <div class="step"><span class="n">STEP 02</span><h3>Repair &amp; inpaint</h3><p>An image-to-image model fills damaged regions. The damage mask fed <em>in</em> becomes the fabrication record <em>out</em> — provenance captured at the source.</p><span class="modal">Image</span></div>
+        <div class="step"><span class="n">STEP 02</span><h3>Repair &amp; inpaint</h3><p>An image-to-image model fills damaged regions. The damage mask fed <em>in</em> becomes the fabrication record <em>out</em>, provenance captured at the source.</p><span class="modal">Image</span></div>
         <div class="step"><span class="n">STEP 03</span><h3>Reconstruct faces</h3><p>When faces are present, a face-restoration pass rebuilds detail from a prior. The face region is logged as high-fabrication automatically.</p><span class="modal">Image</span></div>
         <div class="step"><span class="n">STEP 04</span><h3>Colorize ×3 · corroborate</h3><p>Three independent providers colorize the same image. Where they agree, confidence is high; where they diverge, we flag the region as a guess.</p><span class="modal">Image · fan-out</span></div>
         <div class="step"><span class="n">STEP 05</span><h3>Upscale</h3><p>Super-resolution recovers apparent sharpness. New high-frequency detail is measured against the master and marked as fabricated.</p><span class="modal">Image</span></div>
-        <div class="step"><span class="n">STEP 06</span><h3>Restore audio</h3><p>For archival recordings, a denoise/restore pass cleans crackle and hiss — with its own authenticity record, proving multimodal reach.</p><span class="modal">Audio</span></div>
+        <div class="step"><span class="n">STEP 06</span><h3>Restore audio</h3><p>For archival recordings, a denoise/restore pass cleans crackle and hiss, with its own authenticity record, proving multimodal reach.</p><span class="modal">Audio</span></div>
       </div>
       <div class="grid g3" style="margin-top:18px">
         <div class="card" style="grid-column:span 3">
           <div class="feature-list">
-            <div class="fl"><span class="mk">↻</span><div><h3>Verification loop (LLM-as-judge)</h3><p>After restoration, a vision model compares the result to the master and flags historically implausible inventions — an added person, altered sign text. Flagged regions are marked high-risk or the step retries with conservative settings. This is what turns a demo into a workflow.</p></div></div>
-            <div class="fl"><span class="mk">⛓</span><div><h3>Parent → child lineage</h3><p>Iterative refinement passes link back to their source run, so the entire evolution of a restoration is an auditable graph — not a black box.</p></div></div>
+            <div class="fl"><span class="mk"></span><div><h3>Verification loop (LLM-as-judge)</h3><p>After restoration, a vision model compares the result to the master and flags historically implausible inventions, an added person, altered sign text. Flagged regions are marked high-risk or the step retries with conservative settings. This is what turns a demo into a workflow.</p></div></div>
+            <div class="fl"><span class="mk"></span><div><h3>Parent to child lineage</h3><p>Iterative refinement passes link back to their source run, so the entire evolution of a restoration is an auditable graph, not a black box.</p></div></div>
           </div>
         </div>
       </div>
@@ -511,18 +511,18 @@
     <div class="wrap">
       <div class="sec-head">
         <span class="eyebrow">The authenticity map · our technical core</span>
-        <h2>Recorded at generation time — not reverse-engineered after.</h2>
+        <h2>Recorded at generation time, not reverse-engineered after.</h2>
         <p>Because Trueprint orchestrates every step, it knows exactly what each model changed and where. That's why the map is real and reproducible, not a plausible-looking overlay. Here's how each operation is classified, honestly.</p>
       </div>
       <div class="tablewrap">
         <table>
           <thead><tr><th>Operation</th><th>What's fabricated</th><th>How we know &amp; mark it</th><th>Class</th></tr></thead>
           <tbody>
-            <tr><td>Damage inpainting</td><td>Content filling holes, scratches, tears</td><td>The damage mask fed <em>into</em> the step <em>is</em> the fabricated region — recorded directly.</td><td><span class="op fab">FABRICATED</span></td></tr>
-            <tr><td>Colorization</td><td>All chroma — color is a guess by definition</td><td>A grayscale master has no color, so 100% of hue is inferred. Disagreement between the two providers grades confidence.</td><td><span class="op fab">FABRICATED</span></td></tr>
+            <tr><td>Damage inpainting</td><td>Content filling holes, scratches, tears</td><td>The damage mask fed <em>into</em> the step <em>is</em> the fabricated region, recorded directly.</td><td><span class="op fab">FABRICATED</span></td></tr>
+            <tr><td>Colorization</td><td>All chroma, color is a guess by definition</td><td>A grayscale master has no color, so 100% of hue is inferred. Disagreement between the two providers grades confidence.</td><td><span class="op fab">FABRICATED</span></td></tr>
             <tr><td>Super-resolution</td><td>High-frequency detail absent in the master</td><td>Frequency-domain diff vs. the upsampled master isolates invented structure.</td><td><span class="op fab">FABRICATED</span></td></tr>
             <tr><td>Face restoration</td><td>Facial detail rebuilt from a prior</td><td>The face-detection mask for the step marks the high-fabrication region.</td><td><span class="op fab">FABRICATED</span></td></tr>
-            <tr><td>Denoise / de-scratch</td><td>Nothing — original signal preserved</td><td>Signal is cleaned, not invented; measured change stays below the fabrication threshold.</td><td><span class="op enh">ENHANCED</span></td></tr>
+            <tr><td>Denoise / de-scratch</td><td>Nothing, original signal preserved</td><td>Signal is cleaned, not invented; measured change stays below the fabrication threshold.</td><td><span class="op enh">ENHANCED</span></td></tr>
             <tr><td>Untouched regions</td><td>Nothing</td><td>Pixels identical to the master within tolerance.</td><td><span class="op org">ORIGINAL</span></td></tr>
           </tbody>
         </table>
@@ -531,7 +531,7 @@
         <div class="card">
           <span class="tag" style="color:var(--accent)">The novel move</span>
           <h3>Multi-provider confidence</h3>
-          <p>We run colorization across two independent providers — Google Gemini and OpenAI’s gpt-image (orchestrated via Genblaze) — and measure per-pixel variance. Agreement means the inference is well-grounded; disagreement means the AI is genuinely guessing — surfaced as a confidence heatmap no other restoration tool produces.</p>
+          <p>We run colorization across two independent providers, Google Gemini and OpenAI’s gpt-image (orchestrated via Genblaze), and measure per-pixel variance. Agreement means the inference is well-grounded; disagreement means the AI is genuinely guessing, surfaced as a confidence heatmap no other restoration tool produces.</p>
         </div>
         <div class="card">
           <span class="tag" style="color:var(--accent)">The output</span>
@@ -570,16 +570,16 @@
 <span class="oo">}</span></pre>
         </div>
         <div class="feature-list">
-          <div class="fl"><span class="mk">⬒</span><div><h3>Dual archive on B2 (OAIS model)</h3><p>Immutable masters + restored derivatives + manifests, in a hierarchical, queryable key layout — the system of record, not a dumb blob store.</p></div></div>
-          <div class="fl"><span class="mk">🔒</span><div><h3>Object Lock on masters</h3><p>Backblaze B2 Object Lock makes originals provably unalterable, giving the archive tamper-evident, retention-grade integrity.</p></div></div>
-          <div class="fl"><span class="mk">✓</span><div><h3>Off-platform verification</h3><p>The Verify page reads the manifest embedded in <em>any</em> downloaded Trueprint file and re-checks its hash against B2 — a green pass, or a red tamper alert.</p></div></div>
-          <div class="fl"><span class="mk">◎</span><div><h3>C2PA Content Credentials &amp; Article 50 ready</h3><p>Field names align with the C2PA content-provenance standard, and the disclosure doubles as EU AI Act Article 50 machine-readable AI labeling — enforced from Aug 2, 2026.</p></div></div>
+          <div class="fl"><span class="mk"></span><div><h3>Dual archive on B2 (OAIS model)</h3><p>Immutable masters + restored derivatives + manifests, in a hierarchical, queryable key layout, the system of record, not a dumb blob store.</p></div></div>
+          <div class="fl"><span class="mk"></span><div><h3>Object Lock on masters</h3><p>Backblaze B2 Object Lock makes originals provably unalterable, giving the archive tamper-evident, retention-grade integrity.</p></div></div>
+          <div class="fl"><span class="mk"></span><div><h3>Off-platform verification</h3><p>The Verify page reads the manifest embedded in <em>any</em> downloaded Trueprint file and re-checks its hash against B2, a green pass, or a red tamper alert.</p></div></div>
+          <div class="fl"><span class="mk"></span><div><h3>C2PA Content Credentials &amp; Article 50 ready</h3><p>Field names align with the C2PA content-provenance standard, and the disclosure doubles as EU AI Act Article 50 machine-readable AI labeling, enforced from Aug 2, 2026.</p></div></div>
         </div>
       </div>
       <div style="margin-top:22px" class="act">
         <a class="btn btn-ghost" href="/verify" id="verify-file">Open the Verify page</a>
         <button class="info" aria-label="What is the Verify page?">i</button>
-        <span class="pop" role="tooltip"><span class="k">Verify page</span>A public trust endpoint: drop in any Trueprint file to extract its provenance, confirm the hash against the Backblaze B2 record, and detect any tampering — even for files that left the platform.</span>
+        <span class="pop" role="tooltip"><span class="k">Verify page</span>A public trust endpoint: drop in any Trueprint file to extract its provenance, confirm the hash against the Backblaze B2 record, and detect any tampering, even for files that left the platform.</span>
       </div>
     </div>
   </section>
@@ -591,11 +591,11 @@
     <div class="wrap">
       <div class="sec-head">
         <span class="eyebrow">Who it's for</span>
-        <h2>Anyone who has to trust a restored image — and be trusted with it.</h2>
+        <h2>Anyone who has to trust a restored image, and be trusted with it.</h2>
       </div>
       <div class="grid g4">
         <div class="card"><span class="tag" style="color:var(--accent)">Institutions</span><h3>Archives &amp; museums</h3><p>Publish restored collections with an auditable line between conserved fact and artistic reconstruction.</p></div>
-        <div class="card"><span class="tag" style="color:var(--accent)">Everyday</span><h3>Genealogists &amp; families</h3><p>Bring heirloom photos back to life while keeping an honest note of what was invented — memory, not fabrication.</p></div>
+        <div class="card"><span class="tag" style="color:var(--accent)">Everyday</span><h3>Genealogists &amp; families</h3><p>Bring heirloom photos back to life while keeping an honest note of what was invented, memory, not fabrication.</p></div>
         <div class="card"><span class="tag" style="color:var(--accent)">Media</span><h3>Journalists &amp; documentarians</h3><p>Use restored archival footage on air with a provenance credit that survives fact-checking.</p></div>
         <div class="card"><span class="tag" style="color:var(--accent)">Legal</span><h3>Courts &amp; estates</h3><p>Enter restored evidence with a chain of custody: what's original, what's model-generated, hash-sealed.</p></div>
       </div>
@@ -610,12 +610,12 @@
       <div class="sec-head">
         <span class="eyebrow">Built on</span>
         <h2>The stack that makes provenance possible.</h2>
-        <p>Trueprint isn't a wrapper around one model — it's an orchestration and archival system. These pieces are load-bearing, not logos.</p>
+        <p>Trueprint isn't a wrapper around one model, it's an orchestration and archival system. These pieces are load-bearing, not logos.</p>
       </div>
       <div class="grid g3">
         <div class="card"><span class="tag">Storage · system of record</span><h3>Backblaze B2</h3><p>S3-compatible object storage holding the whole archive.</p><ul><li>Immutable masters via Object Lock</li><li>Derivatives, manifests &amp; step outputs</li><li>Queryable lineage catalog</li><li>Serve, verify &amp; replay from storage</li></ul></div>
-        <div class="card"><span class="tag">Orchestration · provenance</span><h3>Genblaze SDK</h3><p>Backblaze's open-source pipeline engine.</p><ul><li>Multi-provider, multi-modal chaining</li><li>Fallback models &amp; retries</li><li>Hash-verified embedded manifests</li><li>Parent→child run lineage</li></ul></div>
-        <div class="card"><span class="tag">Models · inference</span><h3>GMI Cloud &amp; providers</h3><p>The specialist models each step calls.</p><ul><li>Vision LLM — damage &amp; scene analysis</li><li>Image-to-image — repair, faces, color, upscale</li><li>Audio — denoise &amp; restore</li><li>Swappable per step, no re-architecting</li></ul></div>
+        <div class="card"><span class="tag">Orchestration · provenance</span><h3>Genblaze SDK</h3><p>Backblaze's open-source pipeline engine.</p><ul><li>Multi-provider, multi-modal chaining</li><li>Fallback models &amp; retries</li><li>Hash-verified embedded manifests</li><li>Parent to child run lineage</li></ul></div>
+        <div class="card"><span class="tag">Models · inference</span><h3>GMI Cloud &amp; providers</h3><p>The specialist models each step calls.</p><ul><li>Vision LLM, damage &amp; scene analysis</li><li>Image-to-image, repair, faces, color, upscale</li><li>Audio, denoise &amp; restore</li><li>Swappable per step, no re-architecting</li></ul></div>
       </div>
     </div>
   </section>
@@ -632,13 +632,13 @@
       </div>
       <div>
         <details><summary><span class="term"><span class="plus">+</span> Provenance</span></summary><div class="def">The documented history of where something came from and everything that happened to it. For a restored image, provenance answers: what was the original, which models touched it, and what did each one change?</div></details>
-        <details><summary><span class="term"><span class="plus">+</span> Authenticity map</span></summary><div class="def">A region-level overlay classifying every part of a restored image as <span class="mono">original</span>, <span class="mono">enhanced</span>, or <span class="mono">fabricated</span> — so you can see at a glance what's genuine and what the AI invented.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Authenticity map</span></summary><div class="def">A region-level overlay classifying every part of a restored image as <span class="mono">original</span>, <span class="mono">enhanced</span>, or <span class="mono">fabricated</span>, so you can see at a glance what's genuine and what the AI invented.</div></details>
         <details><summary><span class="term"><span class="plus">+</span> Fabricated vs. original</span></summary><div class="def"><b>Original</b> = real signal from the source. <b>Fabricated</b> = content invented by a model with no basis in the source (colorized hue, inpainted damage, rebuilt faces). Trueprint never blurs the two.</div></details>
-        <details><summary><span class="term"><span class="plus">+</span> Manifest</span></summary><div class="def">A structured record — a small JSON document — listing every pipeline step, the models used, the regions they changed, and hashes of the input and output. Trueprint embeds it inside the media file and stores a copy on B2.</div></details>
-        <details><summary><span class="term"><span class="plus">+</span> Hash / fingerprint</span></summary><div class="def">A <span class="mono">SHA-256</span> hash is a short string uniquely derived from a file's exact bytes. Change one pixel and the hash changes completely — which is how tampering is detected during verification.</div></details>
-        <details><summary><span class="term"><span class="plus">+</span> Multi-provider corroboration</span></summary><div class="def">Running the same task across two independent providers (Google Gemini + OpenAI gpt-image) and comparing results. Agreement signals a well-grounded inference; disagreement reveals genuine uncertainty — Trueprint turns this into a confidence score.</div></details>
-        <details><summary><span class="term"><span class="plus">+</span> C2PA</span></summary><div class="def">The Coalition for Content Provenance and Authenticity standard — a cryptographically signed record of a file's origin and edit history, backed by Adobe, the BBC, the New York Times and others. Trueprint's manifest aligns with it for interoperability.</div></details>
-        <details><summary><span class="term"><span class="plus">+</span> OAIS &amp; Object Lock</span></summary><div class="def"><b>OAIS</b> is the reference model for long-term digital archiving (masters, derivatives, metadata kept distinct). <b>Object Lock</b> is a Backblaze B2 feature that makes a stored object immutable for a set period — so an original master can't be silently altered.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Manifest</span></summary><div class="def">A structured record, a small JSON document, listing every pipeline step, the models used, the regions they changed, and hashes of the input and output. Trueprint embeds it inside the media file and stores a copy on B2.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Hash / fingerprint</span></summary><div class="def">A <span class="mono">SHA-256</span> hash is a short string uniquely derived from a file's exact bytes. Change one pixel and the hash changes completely, which is how tampering is detected during verification.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> Multi-provider corroboration</span></summary><div class="def">Running the same task across two independent providers (Google Gemini + OpenAI gpt-image) and comparing results. Agreement signals a well-grounded inference; disagreement reveals genuine uncertainty, Trueprint turns this into a confidence score.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> C2PA</span></summary><div class="def">The Coalition for Content Provenance and Authenticity standard, a cryptographically signed record of a file's origin and edit history, backed by Adobe, the BBC, the New York Times and others. Trueprint's manifest aligns with it for interoperability.</div></details>
+        <details><summary><span class="term"><span class="plus">+</span> OAIS &amp; Object Lock</span></summary><div class="def"><b>OAIS</b> is the reference model for long-term digital archiving (masters, derivatives, metadata kept distinct). <b>Object Lock</b> is a Backblaze B2 feature that makes a stored object immutable for a set period, so an original master can't be silently altered.</div></details>
         <details><summary><span class="term"><span class="plus">+</span> EU AI Act · Article 50</span></summary><div class="def">The EU AI Act's transparency rule, enforced from <span class="mono">Aug 2, 2026</span>, requiring AI-generated or manipulated media to carry machine-readable disclosure. Trueprint's provenance record satisfies this by design.</div></details>
       </div>
     </div>
@@ -650,17 +650,17 @@
       <div class="band">
         <span class="eyebrow">Restoration you can cite</span>
         <h2>See exactly what the AI invented.</h2>
-        <p>Upload a damaged photo, watch it come back to life across multiple models, and get a verifiable record of every choice — stored durably on Backblaze B2.</p>
+        <p>Upload a damaged photo, watch it come back to life across multiple models, and get a verifiable record of every choice, stored durably on Backblaze B2.</p>
         <div class="hero-cta">
           <span class="act">
-            <a class="btn btn-primary" href="#top">Try the demo <span class="arrow">→</span></a>
+            <a class="btn btn-primary" href="#top">Try the demo <span class="arrow"> to </span></a>
             <button class="info" aria-label="What does Try the demo do?">i</button>
-            <span class="pop" role="tooltip"><span class="k">Try the demo</span>Launches the live restoration app with sample archival photos preloaded — one click to run the full pipeline end to end.</span>
+            <span class="pop" role="tooltip"><span class="k">Try the demo</span>Launches the live restoration app with sample archival photos preloaded, one click to run the full pipeline end to end.</span>
           </span>
           <span class="act">
             <a class="btn btn-ghost" href="#provenance">Verify a file</a>
             <button class="info" aria-label="What does Verify a file do?">i</button>
-            <span class="pop" role="tooltip"><span class="k">Verify a file</span>Check any Trueprint image's provenance and integrity against the Backblaze B2 record — proof that survives leaving the platform.</span>
+            <span class="pop" role="tooltip"><span class="k">Verify a file</span>Check any Trueprint image's provenance and integrity against the Backblaze B2 record, proof that survives leaving the platform.</span>
           </span>
           <span class="act">
             <a class="btn btn-ghost" href="#stack">View the repo</a>
