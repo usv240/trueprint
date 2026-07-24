@@ -77,6 +77,7 @@ class GeminiImageProvider:
     def __new__(cls, api_key: str, *, http_timeout: float = 180.0):
         from genblaze import SyncProvider
         from genblaze_core.exceptions import ProviderError
+        from genblaze_core.models.enums import ProviderErrorCode
         from genblaze_core.models.asset import Asset
         from genblaze_core._utils import local_file_url
 
@@ -90,7 +91,8 @@ class GeminiImageProvider:
             def generate(self, step: Step, config=None) -> Step:
                 url = _first_input_url(step)
                 if not url:
-                    raise ProviderError("GeminiImageProvider: no input image on step")
+                    raise ProviderError("GeminiImageProvider: no input image on step",
+                                        error_code=ProviderErrorCode.INVALID_INPUT)
                 img = httpx.get(url, timeout=self._timeout).content
                 mime = "image/png" if img[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
                 b64 = base64.b64encode(img).decode()
@@ -116,7 +118,9 @@ class GeminiImageProvider:
                         break
                     last = "no image part (thought-only response)"
                 if not out:
-                    raise ProviderError(f"Gemini returned no image after retries ({last})")
+                    # MODEL_ERROR so Genblaze's fallback_models kicks in to the next model
+                    raise ProviderError(f"Gemini returned no image after retries ({last})",
+                                        error_code=ProviderErrorCode.MODEL_ERROR)
                 from pathlib import Path
                 fd, tmp = tempfile.mkstemp(suffix=".png"); os.close(fd)
                 with open(tmp, "wb") as f:

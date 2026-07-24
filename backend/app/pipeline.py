@@ -149,15 +149,20 @@ class RestorePipeline:
         return httpx.get(url, timeout=90).content
 
     def _genblaze_colorize(self, image_url: str, prompt: str, model: str,
-                           params: dict | None = None, provider: Any = None
+                           params: dict | None = None, provider: Any = None,
+                           fallback_models: list[str] | None = None
                            ) -> tuple[bytes | None, Any, str | None]:
-        """Run one colorization through a Genblaze Pipeline on the given provider."""
+        """Run one colorization through a Genblaze Pipeline on the given provider.
+
+        Uses Genblaze's native `fallback_models` — if the model errors, the SDK
+        automatically retries the step on the next model in the list.
+        """
         import genblaze as g
         last_manifest = None
         for _attempt in range(2):   # tolerate a transient provider timeout
             pipe = g.Pipeline("trueprint-colorize").step(
                 provider or self.image_provider, model=model, prompt=prompt, modality=g.Modality.IMAGE,
-                params=params or {},
+                params=params or {}, fallback_models=fallback_models or None,
                 external_inputs=[g.Asset(url=image_url, media_type="image/png")])
             res = pipe.run(timeout=300, raise_on_failure=False)
             last_manifest = getattr(res, "manifest", None)
@@ -222,24 +227,27 @@ class RestorePipeline:
         #    corroboration): GMI gpt-image (OpenAI family) + Google Gemini image.
         size = self._match_size(original.shape[0], original.shape[1])   # avoid model reframing
         gmi = {"provider": self.image_provider, "pname": "gmicloud-image",
-               "model": config.GMI_MODEL_RECOLOR, "prompt": COLORIZE_PROMPTS[1], "params": {"size": size}}
+               "model": config.GMI_MODEL_RECOLOR, "prompt": COLORIZE_PROMPTS[1],
+               "params": {"size": size}, "fallback": []}
         if self.gemini_provider:
             # Gemini is aspect-preserving + reliable -> primary (drives the final image);
             # GMI (OpenAI family) is the independent second opinion for the confidence map.
             colorizers = [{"provider": self.gemini_provider, "pname": "google-gemini-image",
                            "model": config.GOOGLE_MODEL_IMAGE, "prompt": COLORIZE_PROMPTS[0],
-                           "params": {}}, gmi]
+                           "params": {}, "fallback": ["gemini-2.5-flash-image", "gemini-3-pro-image"]},
+                          gmi]
         else:  # single provider available -> two independent samples of it
             colorizers = [{"provider": self.image_provider, "pname": "gmicloud-image",
                            "model": config.GMI_MODEL_RECOLOR, "prompt": COLORIZE_PROMPTS[0],
-                           "params": {"size": size}}, gmi]
+                           "params": {"size": size}, "fallback": []}, gmi]
         colorizers = colorizers[:max(1, samples)]
 
         ai_samples: list[Any] = []
         for i, cz in enumerate(colorizers):
             progress({"step": f"colorize_{i}", "status": "running", "model": cz["model"]})
             data, gbm, out_url = self._genblaze_colorize(master_url, cz["prompt"], cz["model"],
-                                                         params=cz["params"], provider=cz["provider"])
+                                                         params=cz["params"], provider=cz["provider"],
+                                                         fallback_models=cz.get("fallback"))
             if data:
                 ai = A.load_rgb(data)
                 ai_samples.append(ai)
