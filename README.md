@@ -63,6 +63,9 @@ uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 #   landing  http://localhost:8000/
 #   app      http://localhost:8000/app
 #   verify   http://localhost:8000/verify
+
+# 6. Tests (pure-CV authenticity engine + helpers; no credentials needed)
+pytest -q
 ```
 
 `.env` is git-ignored — never commit real keys. See `.env.example` for the full list.
