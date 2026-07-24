@@ -152,6 +152,7 @@
             <button data-mode="confidence" aria-pressed="false">Confidence</button>
           </div>
           <div class="viewer"><img id="viewer-img" alt="result"></div>
+          <p class="small muted" id="view-cap" style="margin-top:8px;line-height:1.5"></p>
           <div class="legend" id="legend">
             <span><span class="d" style="background:var(--verify)"></span>Original / high confidence</span>
             <span><span class="d" style="background:var(--enhanced)"></span>Enhanced</span>
@@ -356,8 +357,15 @@ function renderResult(res){ RES=res; $('#result').classList.remove('hidden');
   if(res.urls&&res.urls.signed){ $('#dl-signed').href=res.urls.signed; $('#dl-signed').style.display=''; }
   else { $('#dl-signed').style.display='none'; }
 }
+const VIEW_CAPS={
+  restored:"The AI-restored image. The structure stays faithful to the original — only the colour is AI-inferred.",
+  master:"The untouched original, preserved on Backblaze B2 as an immutable master (Object Lock).",
+  authenticity_map:"Structure map — teal means we did NOT alter the real photo (luminance locked). Colour is AI-inferred everywhere; how much to trust it is in the Confidence view.",
+  confidence:"Colour trust — teal = the two providers agree (grounded); vermilion = they disagree (the AI is guessing)."
+};
 function setMode(mode){ document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
-  $('#viewer-img').src=RES.urls[mode]; $('#legend').style.display=(mode==='authenticity_map'||mode==='confidence')?'flex':'none'; }
+  $('#viewer-img').src=RES.urls[mode]; $('#legend').style.display=(mode==='authenticity_map'||mode==='confidence')?'flex':'none';
+  $('#view-cap').textContent=VIEW_CAPS[mode]||''; }
 document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
 
 // ---- verify ----
