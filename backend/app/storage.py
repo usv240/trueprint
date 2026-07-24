@@ -41,7 +41,8 @@ class B2Store:
 
     # ---- low-level ----
     def put(self, key: str, data: bytes, content_type: str = "application/octet-stream",
-            *, lock_days: int | None = None, metadata: dict[str, str] | None = None) -> PutResult:
+            *, lock_days: int | None = None, lock_mode: str = "GOVERNANCE",
+            metadata: dict[str, str] | None = None) -> PutResult:
         kwargs: dict[str, Any] = {"content_type": content_type}
         if metadata:
             kwargs["metadata"] = metadata
@@ -49,7 +50,12 @@ class B2Store:
             try:
                 from genblaze import ObjectLockConfig
                 retain = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=lock_days)
-                kwargs["object_lock"] = ObjectLockConfig(retain_until=retain)
+                try:
+                    kwargs["object_lock"] = ObjectLockConfig(retain_until=retain, mode=lock_mode)
+                except Exception:  # mode may require an enum
+                    from genblaze import ObjectLockMode  # type: ignore
+                    kwargs["object_lock"] = ObjectLockConfig(retain_until=retain,
+                                                             mode=ObjectLockMode(lock_mode))
             except Exception:
                 pass  # bucket may reject per-object lock; archive still written
         try:
@@ -71,10 +77,12 @@ class B2Store:
 
     # ---- archive semantics ----
     def put_master(self, asset_id: str, data: bytes, ext: str, content_type: str,
-                   *, lock_days: int = 3, source: dict | None = None) -> PutResult:
-        """Immutable original. Object Lock (compliance) protects it from mutation."""
+                   *, lock_days: int | None = None, source: dict | None = None) -> PutResult:
+        """Immutable original. Object Lock protects it from mutation/deletion."""
+        from .config import config
+        days = config.B2_MASTER_LOCK_DAYS if lock_days is None else lock_days
         key = f"masters/{asset_id}/original.{ext}"
-        res = self.put(key, data, content_type, lock_days=lock_days)
+        res = self.put(key, data, content_type, lock_days=days, lock_mode=config.B2_MASTER_LOCK_MODE)
         meta = {"asset_id": asset_id, "sha256": res.sha256, "size": res.size,
                 "content_type": content_type, "created": _now(), "source": source or {}}
         self.put(f"masters/{asset_id}/master.json",
@@ -89,17 +97,39 @@ class B2Store:
                           data: bytes, content_type: str) -> PutResult:
         return self.put(f"derivatives/{asset_id}/{run_id}/steps/{step}/{name}", data, content_type)
 
-    def append_catalog(self, entry: dict) -> None:
-        """Append-only lineage catalog (read-modify-write; fine at hackathon scale)."""
-        key = "index/catalog.jsonl"
-        prev = b""
-        if self.exists(key):
-            try:
-                prev = self.get(key)
-            except Exception:
-                prev = b""
-        line = (json.dumps({**entry, "_ts": _now()}) + "\n").encode()
-        self.put(key, prev + line, "application/x-ndjson")
+    def put_catalog_entry(self, run_id: str, entry: dict) -> None:
+        """One immutable object per run — no whole-file rewrite, no write races."""
+        self.put(f"index/runs/{run_id}.json",
+                 json.dumps({**entry, "_ts": _now()}).encode(), "application/json")
+
+    def append_catalog(self, entry: dict) -> None:  # back-compat alias
+        self.put_catalog_entry(entry.get("run_id") or _now(), entry)
+
+    def list_keys(self, prefix: str, max_keys: int = 1000) -> list[str]:
+        page = self._be.list(prefix, max_keys=max_keys)
+        out: list[str] = []
+        for e in getattr(page, "entries", []) or []:
+            k = getattr(e, "key", None) or (e.get("key") if isinstance(e, dict) else None)
+            if k:
+                out.append(k)
+        return out
+
+    def list_catalog(self, limit: int = 200) -> list[dict]:
+        entries: list[dict] = []
+        for k in self.list_keys("index/runs/"):
+            if k.endswith(".json"):
+                try:
+                    entries.append(json.loads(self.get(k)))
+                except Exception:
+                    pass
+        entries.sort(key=lambda e: e.get("_ts", ""), reverse=True)
+        return entries[:limit]
+
+    def find_by_hash(self, digest: str) -> dict | None:
+        for e in self.list_catalog(limit=1000):
+            if digest in (e.get("derivative_sha256"), e.get("master_sha256")):
+                return e
+        return None
 
 
 def _now() -> str:

@@ -126,16 +126,8 @@ def cached(name: str):
 @app.get("/api/catalog")
 def catalog(limit: int = 24):
     """The B2 provenance ledger: every restoration with its authenticity + verdicts."""
-    try:
-        lines = store().get("index/catalog.jsonl").decode().splitlines()
-    except Exception:
-        return []
     out, seen_files = [], set()
-    for line in reversed(lines):  # newest first
-        try:
-            e = json.loads(line)
-        except Exception:
-            continue
+    for e in store().list_catalog():  # already newest-first
         aid, rid, fn = e.get("asset_id"), e.get("run_id"), e.get("filename")
         if not aid or not rid or fn in seen_files:   # newest run per photo only
             continue
@@ -234,21 +226,13 @@ async def verify(file: UploadFile = File(...)):
     from . import c2pa_sign
     credential = c2pa_sign.read_credential(data, mime=file.content_type or "image/png")
     # Path B: hash lookup against the B2 catalog
-    try:
-        catalog = store().get("index/catalog.jsonl").decode().splitlines()
-    except Exception:
-        catalog = []
-    for line in catalog:
-        try:
-            row = json.loads(line)
-        except Exception:
-            continue
-        if digest in (row.get("derivative_sha256"), row.get("master_sha256")):
-            base = f"derivatives/{row['asset_id']}/{row['run_id']}"
-            manifest = json.loads(store().get(f"{base}/manifest.json"))
-            kind = "restored derivative" if digest == row.get("derivative_sha256") else "original master"
-            return {"verified": True, "kind": kind, "sha256": digest, "c2pa": credential,
-                    "asset_id": row["asset_id"], "run_id": row["run_id"], "manifest": manifest}
+    row = store().find_by_hash(digest)
+    if row:
+        base = f"derivatives/{row['asset_id']}/{row['run_id']}"
+        manifest = json.loads(store().get(f"{base}/manifest.json"))
+        kind = "restored derivative" if digest == row.get("derivative_sha256") else "original master"
+        return {"verified": True, "kind": kind, "sha256": digest, "c2pa": credential,
+                "asset_id": row["asset_id"], "run_id": row["run_id"], "manifest": manifest}
     # not in catalog — but an embedded C2PA credential may still prove provenance off-platform
     if credential:
         return {"verified": True, "kind": "C2PA Content Credential (embedded)", "sha256": digest,

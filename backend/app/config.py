@@ -22,6 +22,9 @@ class Config:
     B2_S3_ENDPOINT = _get("B2_S3_ENDPOINT")           # e.g. s3.us-east-005.backblazeb2.com
     B2_REGION = _get("B2_REGION")                     # e.g. us-east-005
     B2_BUCKET_ID = _get("B2_BUCKET_ID")
+    # Master immutability: COMPLIANCE = un-bypassable (airtight); GOVERNANCE = dev-friendly.
+    B2_MASTER_LOCK_MODE = _get("B2_MASTER_LOCK_MODE", "COMPLIANCE")
+    B2_MASTER_LOCK_DAYS = int(_get("B2_MASTER_LOCK_DAYS", "1") or 1)
 
     @property
     def b2_endpoint_url(self) -> str:

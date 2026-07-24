@@ -182,7 +182,7 @@ class RestorePipeline:
         # 1) ingest master (immutable)
         progress({"step": "ingest", "status": "running"})
         master = self.store.put_master(asset_id, image_bytes, ext, f"image/{'jpeg' if ext in ('jpg','jpeg') else ext}",
-                                       lock_days=3, source={"filename": filename})
+                                       source={"filename": filename})
         original = A.load_rgb(image_bytes)
         master_url = self.store.url(f"masters/{asset_id}/original.{ext}", expires_in=3600)
         steps.append(StepRecord("ingest", "backblaze-b2", "-", "ORIGINAL", "ok",
