@@ -1,0 +1,11 @@
+{
+  "lincoln.jpg":         {"label": "Abraham Lincoln, 1863",   "kind": "archival"},
+  "portrait2.jpg":       {"label": "Tsar Nicholas II, 1898",  "kind": "archival"},
+  "cityscape.jpg":       {"label": "Flatiron Building, 1902", "kind": "archival"},
+  "migrant_mother.jpg":  {"label": "Migrant Mother, 1936",    "kind": "archival"},
+  "einstein.jpg":        {"label": "Albert Einstein, 1921",   "kind": "archival"},
+  "wright_flyer.jpg":    {"label": "First Flight, 1903",       "kind": "archival"},
+  "sitting_bull.jpg":    {"label": "Sitting Bull, c.1883",     "kind": "archival"},
+  "aigen_portrait.jpg":  {"label": "AI-generated portrait",   "kind": "ai-generated"},
+  "aigen_street.jpg":    {"label": "AI-generated street scene","kind": "ai-generated"}
+}

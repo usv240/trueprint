@@ -162,11 +162,19 @@ def _result_payload(asset_id: str, run_id: str) -> dict:
 @app.get("/api/samples")
 def samples():
     cache = _precache_map()
+    try:
+        labels = json.loads((SAMPLES / "labels.json").read_text())
+    except Exception:
+        labels = {}
     out = []
     for p in sorted(SAMPLES.glob("*.jpg")):
+        meta = labels.get(p.name, {})
         out.append({"name": p.name, "url": f"/api/sample/{p.name}",
-                    "label": p.stem.replace("_", " ").title(),
+                    "label": meta.get("label") or p.stem.replace("_", " ").title(),
+                    "kind": meta.get("kind", "archival"),
                     "cached": p.name in cache})
+    # archival first, then AI-generated
+    out.sort(key=lambda s: (s["kind"] != "archival", s["label"]))
     return out
 
 
