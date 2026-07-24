@@ -9,7 +9,9 @@ import io, json, threading, uuid, time
 from pathlib import Path
 from queue import Queue, Empty
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+import datetime as dt
+from collections import deque
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -45,6 +47,59 @@ def store() -> B2Store:
 
 # ---- in-memory job registry (single-instance; fine for the demo) ----
 JOBS: dict[str, dict] = {}
+
+# ---- abuse / cost protection for the public endpoint (live runs cost money) ----
+import os as _os
+RATE_PER_IP_HOUR = int(_os.getenv("TP_RATE_PER_IP_HOUR", "6"))
+MAX_CONCURRENT = int(_os.getenv("TP_MAX_CONCURRENT", "3"))
+DAILY_CAP = int(_os.getenv("TP_DAILY_CAP", "150"))
+MAX_UPLOAD_MB = int(_os.getenv("TP_MAX_UPLOAD_MB", "12"))
+MAX_DIM = int(_os.getenv("TP_MAX_DIM", "1600"))
+_ip_hits: dict[str, deque] = {}
+_daily = {"date": "", "count": 0}
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    return (fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "?"))
+
+
+def _enforce_limits(request: Request) -> None:
+    """Cached results are free & unlimited; only live generation is rate-limited."""
+    now = time.time()
+    active = sum(1 for j in JOBS.values() if j.get("result") is None and j.get("error") is None)
+    if active >= MAX_CONCURRENT:
+        raise HTTPException(429, "Server busy (max concurrent restorations). Try a cached sample — those are instant.")
+    today = dt.date.today().isoformat()
+    if _daily["date"] != today:
+        _daily.update(date=today, count=0)
+    if _daily["count"] >= DAILY_CAP:
+        raise HTTPException(429, "Daily live-restoration budget reached. Cached samples remain available.")
+    ip = _client_ip(request)
+    dq = _ip_hits.setdefault(ip, deque())
+    while dq and now - dq[0] > 3600:
+        dq.popleft()
+    if len(dq) >= RATE_PER_IP_HOUR:
+        raise HTTPException(429, f"Rate limit: max {RATE_PER_IP_HOUR} live restorations/hour. Cached samples are unlimited.")
+    dq.append(now)
+    _daily["count"] += 1
+
+
+def _cap_dimensions(data: bytes) -> bytes:
+    """Downscale oversized uploads to bound cost/latency."""
+    import io
+    from PIL import Image
+    try:
+        img = Image.open(io.BytesIO(data))
+        if max(img.size) <= MAX_DIM:
+            return data
+        img = img.convert("RGB")
+        r = MAX_DIM / max(img.size)
+        img = img.resize((int(img.width * r), int(img.height * r)))
+        buf = io.BytesIO(); img.save(buf, "JPEG", quality=92)
+        return buf.getvalue()
+    except Exception:
+        return data
 
 
 def _run_job(job_id: str, image_bytes: bytes, filename: str, samples: int) -> None:
@@ -164,8 +219,9 @@ def sample_img(name: str):
 
 
 @app.post("/api/restore")
-async def restore(file: UploadFile | None = File(None), sample: str | None = Form(None),
-                  samples: int = Form(2)):
+async def restore(request: Request, file: UploadFile | None = File(None),
+                  sample: str | None = Form(None), samples: int = Form(2)):
+    _enforce_limits(request)
     if sample:
         p = (SAMPLES / sample).resolve()
         if not str(p).startswith(str(SAMPLES.resolve())) or not p.exists():
@@ -173,10 +229,11 @@ async def restore(file: UploadFile | None = File(None), sample: str | None = For
         data, filename = p.read_bytes(), sample
     elif file is not None:
         data, filename = await file.read(), (file.filename or "upload.jpg")
+        if len(data) > MAX_UPLOAD_MB * 1024 * 1024:
+            raise HTTPException(413, f"image too large (max {MAX_UPLOAD_MB}MB)")
+        data = _cap_dimensions(data)   # bound cost/latency on big uploads
     else:
         raise HTTPException(400, "provide a file or a sample name")
-    if len(data) > 25 * 1024 * 1024:
-        raise HTTPException(413, "image too large (max 25MB)")
 
     job_id = uuid.uuid4().hex[:12]
     JOBS[job_id] = {"queue": Queue(), "result": None, "error": None, "created": time.time()}
